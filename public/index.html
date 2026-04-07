@@ -78,22 +78,77 @@
     </div>
   </section>
 
-  <!-- Features -->
-  <!-- Value Props -->
-  <section class="value-props">
-    <div class="value-prop">
-      <span class="value-num">50+</span>
-      <span class="value-label">AI tools launched every week</span>
-    </div>
-    <div class="value-divider"></div>
-    <div class="value-prop">
-      <span class="value-num">∞</span>
-      <span class="value-label">Tools you can save — for free</span>
-    </div>
-    <div class="value-divider"></div>
-    <div class="value-prop">
-      <span class="value-num">1</span>
-      <span class="value-label">Dashboard to rule them all</span>
+  <!-- 3D Dashboard Demo -->
+  <section class="dashboard-demo-section">
+    <div class="demo-container">
+      <div class="demo-glow"></div>
+      <div class="demo-dashboard" id="demoDashboard">
+        <!-- Simplified Dashboard Mockup -->
+        <div class="demo-topbar">
+          <div class="demo-logo">⬡ <span>AIDock</span></div>
+          <div class="demo-toggle">
+            <span class="demo-toggle-active">My View</span>
+            <span>Social</span>
+          </div>
+          <div class="demo-search">
+            <span class="demo-search-icon">🔍</span>
+            <span>Search tools...</span>
+          </div>
+        </div>
+        <div class="demo-body">
+          <div class="demo-sidebar">
+            <div class="demo-cat demo-cat-active">📁 All Tools <span>10</span></div>
+            <div class="demo-cat">💻 Coding <span>1</span></div>
+            <div class="demo-cat">🎬 Video <span>1</span></div>
+            <div class="demo-cat">⚙️ Workflow <span>3</span></div>
+            <div class="demo-cat">🎨 Design <span>1</span></div>
+            <div class="demo-tier">
+              <div class="demo-tier-badge">🆓 Free Tier</div>
+              <div class="demo-tier-bar"><div class="demo-tier-fill"></div></div>
+              <span>10 / 10 tools</span>
+            </div>
+          </div>
+          <div class="demo-main">
+            <div class="demo-greeting">Good Evening, User 👋</div>
+            <div class="demo-stats">
+              <div class="demo-stat"><span class="demo-stat-num">10</span><span>Tools</span></div>
+              <div class="demo-stat"><span class="demo-stat-num">6</span><span>Categories</span></div>
+              <div class="demo-stat"><span class="demo-stat-num">6</span><span>Free</span></div>
+              <div class="demo-stat"><span class="demo-stat-num">1</span><span>Paid</span></div>
+            </div>
+            <div class="demo-tools-grid">
+              <div class="demo-tool">
+                <img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" alt="">
+                <div class="demo-tool-info">
+                  <span class="demo-tool-name">ChatGPT</span>
+                  <span class="demo-tool-badge demo-freemium">Freemium</span>
+                </div>
+              </div>
+              <div class="demo-tool">
+                <img src="https://www.google.com/s2/favicons?domain=zapier.com&sz=64" alt="">
+                <div class="demo-tool-info">
+                  <span class="demo-tool-name">Zapier AI</span>
+                  <span class="demo-tool-badge demo-freemium">Freemium</span>
+                </div>
+              </div>
+              <div class="demo-tool">
+                <img src="https://www.google.com/s2/favicons?domain=openclaw.ai&sz=64" alt="">
+                <div class="demo-tool-info">
+                  <span class="demo-tool-name">OpenClaw</span>
+                  <span class="demo-tool-badge demo-freemium">Freemium</span>
+                </div>
+              </div>
+              <div class="demo-tool">
+                <img src="https://www.google.com/s2/favicons?domain=make.com&sz=64" alt="">
+                <div class="demo-tool-info">
+                  <span class="demo-tool-name">Make</span>
+                  <span class="demo-tool-badge demo-freemium">Freemium</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -284,6 +339,63 @@
   </div>
 
   <script>
+    // 3D Dashboard Demo - Mouse tracking and floating effect
+    (function() {
+      const demo = document.getElementById('demoDashboard');
+      if (!demo) return;
+      
+      let isHovering = false;
+      let targetRotateX = 0;
+      let targetRotateY = 0;
+      let currentRotateX = 0;
+      let currentRotateY = 0;
+      let floatPhase = 0;
+      
+      // Mouse move handler
+      demo.parentElement.addEventListener('mousemove', (e) => {
+        if (!isHovering) return;
+        const rect = demo.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const mouseX = e.clientX - centerX;
+        const mouseY = e.clientY - centerY;
+        
+        targetRotateY = (mouseX / rect.width) * 20;
+        targetRotateX = -(mouseY / rect.height) * 15;
+      });
+      
+      demo.parentElement.addEventListener('mouseenter', () => {
+        isHovering = true;
+        demo.style.animationPlayState = 'paused';
+      });
+      
+      demo.parentElement.addEventListener('mouseleave', () => {
+        isHovering = false;
+        targetRotateX = 0;
+        targetRotateY = 0;
+        demo.style.animationPlayState = 'running';
+      });
+      
+      // Smooth animation loop
+      function animate() {
+        // Smooth interpolation
+        currentRotateX += (targetRotateX - currentRotateX) * 0.08;
+        currentRotateY += (targetRotateY - currentRotateY) * 0.08;
+        
+        if (isHovering) {
+          demo.style.transform = `
+            perspective(1200px) 
+            rotateX(${currentRotateX}deg) 
+            rotateY(${currentRotateY}deg)
+            scale(1.02)
+          `;
+        }
+        
+        requestAnimationFrame(animate);
+      }
+      animate();
+    })();
+
     // Extension modal handling
     (function() {
       const btn = document.getElementById('getExtensionBtn');
