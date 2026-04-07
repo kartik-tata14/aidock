@@ -1318,7 +1318,7 @@
     const grid = $('#friendsGrid');
     const empty = $('#friendsEmpty');
     const countEl = $('#friendsCount');
-    if (countEl) countEl.textContent = friendsCache.length > 0 ? friendsCache.length + ' friend' + (friendsCache.length !== 1 ? 's' : '') : '';
+    if (countEl) countEl.textContent = friendsCache.length > 0 ? friendsCache.length + ' following' : '';
     if (friendsCache.length === 0) {
       grid.innerHTML = '';
       grid.style.display = 'none';
@@ -1354,6 +1354,91 @@
     });
   }
 
+  /* ===== Follow Search ===== */
+  const followSearchInput = $('#followSearchInput');
+  const followSearchBtn = $('#followSearchBtn');
+  const followSearchResult = $('#followSearchResult');
+
+  async function searchAndFollow() {
+    const email = followSearchInput.value.trim();
+    if (!email) return;
+    
+    followSearchBtn.disabled = true;
+    followSearchBtn.textContent = 'Searching...';
+    followSearchResult.style.display = 'none';
+    
+    try {
+      const data = await api('/api/users/search?email=' + encodeURIComponent(email));
+      const user = data.user;
+      
+      const initials = user.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      const avatarStyle = user.avatar
+        ? `background-image:url(${user.avatar});background-size:cover;background-position:center;color:transparent`
+        : '';
+      const roles = [user.primary_role, user.secondary_role].filter(Boolean).join(' · ') || 'No role set';
+      
+      followSearchResult.innerHTML = `
+        <div class="follow-result-user">
+          <div class="follow-result-avatar" style="${avatarStyle}">${user.avatar ? '' : initials}</div>
+          <div class="follow-result-info">
+            <div class="follow-result-name">${esc(user.name)}</div>
+            <div class="follow-result-role">${esc(roles)}</div>
+          </div>
+          <div class="follow-result-actions">
+            ${user.is_following 
+              ? `<button class="follow-btn follow-btn-following" data-user-id="${user.id}">Following ✓</button>`
+              : `<button class="follow-btn follow-btn-follow" data-user-id="${user.id}">Follow</button>`
+            }
+          </div>
+        </div>
+      `;
+      followSearchResult.style.display = '';
+      
+      // Bind follow/unfollow click
+      const followBtn = followSearchResult.querySelector('.follow-btn');
+      followBtn.addEventListener('click', async () => {
+        const userId = Number(followBtn.dataset.userId);
+        const isCurrentlyFollowing = followBtn.classList.contains('follow-btn-following');
+        
+        followBtn.disabled = true;
+        followBtn.textContent = isCurrentlyFollowing ? 'Unfollowing...' : 'Following...';
+        
+        try {
+          if (isCurrentlyFollowing) {
+            await api('/api/follows/' + userId, { method: 'DELETE' });
+            followBtn.className = 'follow-btn follow-btn-follow';
+            followBtn.textContent = 'Follow';
+          } else {
+            await api('/api/follows', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+            followBtn.className = 'follow-btn follow-btn-following';
+            followBtn.textContent = 'Following ✓';
+          }
+          // Refresh friends list
+          await loadFriends();
+        } catch (err) {
+          alert(err.message || 'Operation failed.');
+          followBtn.textContent = isCurrentlyFollowing ? 'Following ✓' : 'Follow';
+        }
+        followBtn.disabled = false;
+      });
+      
+    } catch (err) {
+      followSearchResult.innerHTML = `<p class="follow-result-error">${esc(err.message || 'User not found.')}</p>`;
+      followSearchResult.style.display = '';
+    }
+    
+    followSearchBtn.disabled = false;
+    followSearchBtn.textContent = 'Find';
+  }
+
+  followSearchBtn.addEventListener('click', searchAndFollow);
+  followSearchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchAndFollow();
+    }
+  });
+
   /* ===== Friend Profile ===== */
   let friendProfileData = null;
 
@@ -1378,11 +1463,48 @@
       : '';
     const roles = [friend.primary_role, friend.secondary_role].filter(Boolean).join(' · ');
 
+    const followBtnHtml = friend.is_following 
+      ? `<button class="follow-btn follow-btn-following profile-follow-btn" data-user-id="${friend.id}">Following ✓</button>`
+      : '';
+
     $('#friendProfileHeader').innerHTML = `
       <div class="friend-profile-avatar" style="${avatarStyle}">${friend.avatar ? '' : initials}</div>
       <div class="friend-profile-name">${esc(friend.name)}</div>
       ${roles ? `<div class="friend-profile-role">${esc(roles)}</div>` : ''}
+      ${followBtnHtml}
     `;
+
+    // Bind profile follow/unfollow button
+    const profileFollowBtn = $('#friendProfileHeader').querySelector('.profile-follow-btn');
+    if (profileFollowBtn) {
+      profileFollowBtn.addEventListener('click', async () => {
+        const userId = Number(profileFollowBtn.dataset.userId);
+        const isCurrentlyFollowing = profileFollowBtn.classList.contains('follow-btn-following');
+        
+        profileFollowBtn.disabled = true;
+        profileFollowBtn.textContent = isCurrentlyFollowing ? 'Unfollowing...' : 'Following...';
+        
+        try {
+          if (isCurrentlyFollowing) {
+            await api('/api/follows/' + userId, { method: 'DELETE' });
+            profileFollowBtn.className = 'follow-btn follow-btn-follow profile-follow-btn';
+            profileFollowBtn.textContent = 'Follow';
+            friend.is_following = false;
+          } else {
+            await api('/api/follows', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+            profileFollowBtn.className = 'follow-btn follow-btn-following profile-follow-btn';
+            profileFollowBtn.textContent = 'Following ✓';
+            friend.is_following = true;
+          }
+          // Refresh friends list in background
+          loadFriends();
+        } catch (err) {
+          alert(err.message || 'Operation failed.');
+          profileFollowBtn.textContent = isCurrentlyFollowing ? 'Following ✓' : 'Follow';
+        }
+        profileFollowBtn.disabled = false;
+      });
+    }
 
     // Tools tab
     const toolsTab = $('#friendToolsTab');

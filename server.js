@@ -722,18 +722,36 @@ app.post('/api/stacks/clone/:slug', authMiddleware, async (req, res) => {
 });
 
 // ===== Friends / Social =====
+
+// Helper to get all people a user can see (referrals + follows)
+async function getVisibleUserIds(userId) {
+  const visibleIds = new Set();
+  
+  // People I referred
+  const referred = await db.execute("SELECT referred_id FROM referrals WHERE referrer_id = ?", [userId]);
+  referred.rows.forEach(r => visibleIds.add(r.referred_id));
+  
+  // Person who referred me
+  const me = await db.execute("SELECT referred_by FROM users WHERE id = ?", [userId]);
+  if (me.rows[0]?.referred_by) visibleIds.add(me.rows[0].referred_by);
+  
+  // People I follow
+  const following = await db.execute("SELECT followed_id FROM follows WHERE follower_id = ?", [userId]);
+  following.rows.forEach(r => visibleIds.add(r.followed_id));
+  
+  return visibleIds;
+}
+
 app.get('/api/friends', authMiddleware, async (req, res) => {
   try {
     const myId = req.user.id;
-    const friendIds = new Set();
-
-    const referred = await db.execute("SELECT referred_id FROM referrals WHERE referrer_id = ?", [myId]);
-    referred.rows.forEach(r => friendIds.add(r.referred_id));
-
-    const me = await db.execute("SELECT referred_by FROM users WHERE id = ?", [myId]);
-    if (me.rows[0]?.referred_by) friendIds.add(me.rows[0].referred_by);
+    const friendIds = await getVisibleUserIds(myId);
 
     if (friendIds.size === 0) return res.json({ friends: [] });
+
+    // Get follow status for each friend
+    const followingResult = await db.execute("SELECT followed_id FROM follows WHERE follower_id = ?", [myId]);
+    const followingSet = new Set(followingResult.rows.map(r => r.followed_id));
 
     const friends = [];
     for (const fid of friendIds) {
@@ -754,7 +772,8 @@ app.get('/api/friends', authMiddleware, async (req, res) => {
         avatar: row.avatar || '',
         tool_count: toolCount,
         stack_count: stackCount,
-        shared_stack_count: sharedStackCount
+        shared_stack_count: sharedStackCount,
+        is_following: followingSet.has(fid)
       });
     }
     res.json({ friends });
@@ -769,17 +788,17 @@ app.get('/api/friends/:id/profile', authMiddleware, async (req, res) => {
     const myId = req.user.id;
     const friendId = Number(req.params.id);
 
-    const friendIds = new Set();
-    const referred = await db.execute("SELECT referred_id FROM referrals WHERE referrer_id = ?", [myId]);
-    referred.rows.forEach(r => friendIds.add(r.referred_id));
-    const me = await db.execute("SELECT referred_by FROM users WHERE id = ?", [myId]);
-    if (me.rows[0]?.referred_by) friendIds.add(me.rows[0].referred_by);
+    const friendIds = await getVisibleUserIds(myId);
 
-    if (!friendIds.has(friendId)) return res.status(403).json({ error: 'Not your friend.' });
+    if (!friendIds.has(friendId)) return res.status(403).json({ error: 'You are not following this person.' });
 
     const u = await db.execute("SELECT id, name, primary_role, secondary_role, avatar FROM users WHERE id = ?", [friendId]);
     if (u.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
     const row = u.rows[0];
+
+    // Check if I'm following this person
+    const followCheck = await db.execute("SELECT id FROM follows WHERE follower_id = ? AND followed_id = ?", [myId, friendId]);
+    const isFollowing = followCheck.rows.length > 0;
 
     const toolResult = await db.execute("SELECT id, user_id, name, url, category, pricing, description, notes, created_at, updated_at FROM tools WHERE user_id = ? ORDER BY created_at DESC", [friendId]);
     const tools = toolResult.rows.map(rowToTool);
@@ -792,13 +811,112 @@ app.get('/api/friends/:id/profile', authMiddleware, async (req, res) => {
     }
 
     res.json({
-      friend: { id: row.id, name: row.name || '', primary_role: row.primary_role || '', secondary_role: row.secondary_role || '', avatar: row.avatar || '' },
+      friend: { id: row.id, name: row.name || '', primary_role: row.primary_role || '', secondary_role: row.secondary_role || '', avatar: row.avatar || '', is_following: isFollowing },
       tools,
       stacks
     });
   } catch (err) {
     console.error('Get friend profile error:', err);
     res.status(500).json({ error: 'Failed to fetch friend profile.' });
+  }
+});
+
+// Search for a user by email (to follow them)
+app.get('/api/users/search', authMiddleware, async (req, res) => {
+  try {
+    const email = (req.query.email || '').toLowerCase().trim();
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+    
+    // Don't allow searching for yourself
+    if (email === req.user.email.toLowerCase()) {
+      return res.status(400).json({ error: 'You cannot search for yourself.' });
+    }
+    
+    const result = await db.execute("SELECT id, name, primary_role, secondary_role, avatar FROM users WHERE LOWER(email) = ?", [email]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No user found with this email.' });
+    }
+    
+    const row = result.rows[0];
+    
+    // Check if already following
+    const followCheck = await db.execute("SELECT id FROM follows WHERE follower_id = ? AND followed_id = ?", [req.user.id, row.id]);
+    const isFollowing = followCheck.rows.length > 0;
+    
+    // Check if connected via referral
+    const visibleIds = await getVisibleUserIds(req.user.id);
+    const isConnected = visibleIds.has(row.id);
+    
+    res.json({
+      user: {
+        id: row.id,
+        name: row.name || '',
+        primary_role: row.primary_role || '',
+        secondary_role: row.secondary_role || '',
+        avatar: row.avatar || '',
+        is_following: isFollowing,
+        is_connected: isConnected
+      }
+    });
+  } catch (err) {
+    console.error('User search error:', err);
+    res.status(500).json({ error: 'Search failed.' });
+  }
+});
+
+// Follow a user
+app.post('/api/follows', authMiddleware, async (req, res) => {
+  try {
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'User ID is required.' });
+    
+    const targetId = Number(user_id);
+    if (targetId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot follow yourself.' });
+    }
+    
+    // Check if user exists
+    const userCheck = await db.execute("SELECT id FROM users WHERE id = ?", [targetId]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    
+    // Check if already following
+    const existingFollow = await db.execute("SELECT id FROM follows WHERE follower_id = ? AND followed_id = ?", [req.user.id, targetId]);
+    if (existingFollow.rows.length > 0) {
+      return res.status(409).json({ error: 'You are already following this user.' });
+    }
+    
+    // Create follow relationship
+    await db.execute("INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)", [req.user.id, targetId]);
+    db.saveToFile();
+    
+    res.json({ ok: true, message: 'Now following this user.' });
+  } catch (err) {
+    console.error('Follow error:', err);
+    res.status(500).json({ error: 'Failed to follow user.' });
+  }
+});
+
+// Unfollow a user
+app.delete('/api/follows/:userId', authMiddleware, async (req, res) => {
+  try {
+    const targetId = Number(req.params.userId);
+    
+    // Check if following
+    const existingFollow = await db.execute("SELECT id FROM follows WHERE follower_id = ? AND followed_id = ?", [req.user.id, targetId]);
+    if (existingFollow.rows.length === 0) {
+      return res.status(404).json({ error: 'You are not following this user.' });
+    }
+    
+    // Remove follow relationship
+    await db.execute("DELETE FROM follows WHERE follower_id = ? AND followed_id = ?", [req.user.id, targetId]);
+    db.saveToFile();
+    
+    res.json({ ok: true, message: 'Unfollowed successfully.' });
+  } catch (err) {
+    console.error('Unfollow error:', err);
+    res.status(500).json({ error: 'Failed to unfollow user.' });
   }
 });
 
@@ -893,6 +1011,19 @@ async function initSchema() {
     FOREIGN KEY (referrer_id) REFERENCES users(id),
     FOREIGN KEY (referred_id) REFERENCES users(id)
   )`);
+  
+  // Follows table (for social following feature - separate from referrals)
+  await db.execute(`CREATE TABLE IF NOT EXISTS follows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    follower_id INTEGER NOT NULL,
+    followed_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT (datetime('now')),
+    UNIQUE(follower_id, followed_id),
+    FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (followed_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id)"); } catch {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_follows_followed ON follows(followed_id)"); } catch {}
   
   // Backfill invite codes
   const noCode = await db.execute("SELECT id FROM users WHERE invite_code IS NULL OR invite_code = ''");
