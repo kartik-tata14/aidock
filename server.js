@@ -819,6 +819,31 @@ app.get('/api/referrer/:code', async (req, res) => {
   }
 });
 
+// ===== Extension Download =====
+app.get('/api/extension/download', async (req, res) => {
+  try {
+    const archiver = require('archiver');
+    const fs = require('fs');
+    const extensionDir = path.join(__dirname, 'extension');
+    
+    if (!fs.existsSync(extensionDir)) {
+      return res.status(404).json({ error: 'Extension not found' });
+    }
+    
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename=aidock-extension.zip');
+    
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (err) => { throw err; });
+    archive.pipe(res);
+    archive.directory(extensionDir, 'aidock-extension');
+    await archive.finalize();
+  } catch (err) {
+    console.error('Extension download error:', err);
+    res.status(500).json({ error: 'Failed to create extension package' });
+  }
+});
+
 // ===== Page routes =====
 app.get('/auth', (req, res) => res.sendFile(path.join(__dirname, 'public', 'auth.html')));
 app.get('/join/:code', (req, res) => res.sendFile(path.join(__dirname, 'public', 'invite.html')));

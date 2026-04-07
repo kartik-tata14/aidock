@@ -23,6 +23,10 @@
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
         <a href="#pricing">Pricing</a>
+        <button class="btn-extension" id="getExtensionBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+          Get Extension
+        </button>
         <a href="/auth" class="btn-primary btn-nav">Get Started</a>
       </div>
     </div>
@@ -219,6 +223,92 @@
     <div class="logo"><span class="logo-icon">⬡</span><span class="logo-text">AIDock</span></div>
     <p>Built with ♥ for the AI-curious.</p>
   </footer>
+
+  <!-- Extension Install Modal -->
+  <div class="ext-modal-overlay" id="extModalOverlay">
+    <div class="ext-modal">
+      <button class="ext-modal-close" id="extModalClose">&times;</button>
+      <div class="ext-modal-header">
+        <div class="ext-modal-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+        </div>
+        <h2>Get AIDock Chrome Extension</h2>
+        <p>Save AI tools directly from any website with one click</p>
+      </div>
+      <div class="ext-modal-steps">
+        <div class="ext-step">
+          <div class="ext-step-num">1</div>
+          <div class="ext-step-content">
+            <strong>Download the extension</strong>
+            <p>Click the button below to download the extension files</p>
+            <a href="/api/extension/download" class="btn-primary ext-download-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Extension (.zip)
+            </a>
+          </div>
+        </div>
+        <div class="ext-step">
+          <div class="ext-step-num">2</div>
+          <div class="ext-step-content">
+            <strong>Unzip the file</strong>
+            <p>Extract the downloaded zip file to a folder on your computer</p>
+          </div>
+        </div>
+        <div class="ext-step">
+          <div class="ext-step-num">3</div>
+          <div class="ext-step-content">
+            <strong>Open Chrome Extensions</strong>
+            <p>Go to <code>chrome://extensions</code> in your browser</p>
+            <button class="btn-secondary ext-copy-url" data-url="chrome://extensions">Copy URL</button>
+          </div>
+        </div>
+        <div class="ext-step">
+          <div class="ext-step-num">4</div>
+          <div class="ext-step-content">
+            <strong>Enable Developer Mode</strong>
+            <p>Toggle "Developer mode" ON in the top-right corner</p>
+          </div>
+        </div>
+        <div class="ext-step">
+          <div class="ext-step-num">5</div>
+          <div class="ext-step-content">
+            <strong>Load the extension</strong>
+            <p>Click "Load unpacked" and select the unzipped extension folder</p>
+          </div>
+        </div>
+      </div>
+      <div class="ext-modal-footer">
+        <p>🎉 That's it! Click the AIDock icon in your browser toolbar to start saving tools.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Extension modal handling
+    (function() {
+      const btn = document.getElementById('getExtensionBtn');
+      const overlay = document.getElementById('extModalOverlay');
+      const closeBtn = document.getElementById('extModalClose');
+      
+      if (btn && overlay) {
+        btn.addEventListener('click', () => overlay.classList.add('active'));
+        closeBtn.addEventListener('click', () => overlay.classList.remove('active'));
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) overlay.classList.remove('active');
+        });
+        
+        // Copy URL buttons
+        document.querySelectorAll('.ext-copy-url').forEach(btn => {
+          btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(btn.dataset.url);
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = orig, 1500);
+          });
+        });
+      }
+    })();
+  </script>
 
 </body>
 </html>

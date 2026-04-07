@@ -1528,6 +1528,26 @@
     router.navigate('/dashboard/social');
   });
 
+  /* ===== Extension Modal ===== */
+  const extBtn = $('#getExtensionBtn');
+  const extOverlay = $('#extModalOverlay');
+  const extClose = $('#extModalClose');
+  if (extBtn && extOverlay) {
+    extBtn.addEventListener('click', () => extOverlay.classList.add('active'));
+    extClose.addEventListener('click', () => extOverlay.classList.remove('active'));
+    extOverlay.addEventListener('click', (e) => {
+      if (e.target === extOverlay) extOverlay.classList.remove('active');
+    });
+    document.querySelectorAll('.ext-copy-url').forEach(btn => {
+      btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(btn.dataset.url);
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = orig, 1500);
+      });
+    });
+  }
+
   /* ===== Init ===== */
   init();
 })();
