@@ -1862,6 +1862,27 @@ a:hover { text-decoration: underline; }
   border-top: 1px solid var(--border); text-align: center;
 }
 .ext-modal-footer p { font-size: 14px; color: var(--text); margin: 0; }
+
+/* Force dark mode for extension modal on landing page */
+.landing-body .ext-modal {
+  background: #1a1a2e; border-color: rgba(255,255,255,0.1);
+}
+.landing-body .ext-modal-close { color: rgba(255,255,255,0.5); }
+.landing-body .ext-modal-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.landing-body .ext-modal-header h2 { color: #fff; }
+.landing-body .ext-modal-header p { color: rgba(255,255,255,0.6); }
+.landing-body .ext-step { background: rgba(255,255,255,0.05); }
+.landing-body .ext-step-content strong { color: #fff; }
+.landing-body .ext-step-content p { color: rgba(255,255,255,0.6); }
+.landing-body .ext-step-content code { background: rgba(255,255,255,0.1); color: #60a5fa; }
+.landing-body .ext-modal-footer { border-color: rgba(255,255,255,0.1); }
+.landing-body .ext-modal-footer p { color: #fff; }
+.landing-body .ext-copy-url {
+  background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2);
+  color: #fff;
+}
+.landing-body .ext-copy-url:hover { background: rgba(255,255,255,0.15); }
+
 .friend-stack-stat { font-size: 11px; color: var(--text-secondary); }
 .friend-stack-clone {
   display: inline-flex; align-items: center; gap: 4px;
