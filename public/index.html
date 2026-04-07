@@ -40,7 +40,10 @@
       <h1>Your AI tools.<br><span class="hero-gradient">Saved. Shared. Discovered.</span></h1>
       <p class="hero-sub">AIDock is the personal vault for AI consultants — Save every AI tool you use into one beautiful dashboard. Share your curated stack with friends and community — and discover what tools others swear by.</p>
       <div class="hero-actions">
-        <a href="/auth" class="btn-primary btn-hero">Start Docking — It's Free</a>
+        <button class="btn-primary btn-hero" id="heroExtensionBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+          Get Chrome Extension — It's Free
+        </button>
         <a href="#features" class="btn-secondary btn-hero">See Features ↓</a>
       </div>
       <div class="hero-preview">
@@ -157,6 +160,11 @@
     <p class="section-sub">New AI tools launch every day. Without a system, you forget what you found and miss what others discovered. AIDock fixes that.</p>
     <div class="features-grid">
       <div class="feature-card feature-highlight">
+        <div class="feature-icon">☝️</div>
+        <h3>One-Click Save</h3>
+        <p>Save any AI tool instantly with our Chrome extension. Just one click while browsing — no copy-pasting URLs or switching tabs.</p>
+      </div>
+      <div class="feature-card feature-highlight">
         <div class="feature-icon">🏠</div>
         <h3>Your Personal AI Dashboard</h3>
         <p>One place for every AI tool you use or want to try. Categorised, searchable, and always at your fingertips. No more scattered bookmarks or forgotten tabs.</p>
@@ -166,7 +174,7 @@
         <h3>Share Your Stack</h3>
         <p>Built an incredible AI toolkit? Share your curated stack with friends, teammates, or the whole community. Let others benefit from your discoveries.</p>
       </div>
-      <div class="feature-card feature-highlight">
+      <div class="feature-card">
         <div class="feature-icon">🌍</div>
         <h3>Discover What Others Use</h3>
         <p>Browse stacks shared by the community. See what tools top creators, developers and teams rely on — and expand your own knowledgebase.</p>
@@ -180,11 +188,6 @@
         <div class="feature-icon">🔍</div>
         <h3>Auto-detect Descriptions</h3>
         <p>Paste a URL and AIDock fetches the description automatically. Add your own notes for personal context.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📥</div>
-        <h3>Import & Export</h3>
-        <p>Bring your tools via CSV or export your entire stack. Your data, portable and always yours.</p>
       </div>
     </div>
   </section>
@@ -401,6 +404,7 @@
       const btn = document.getElementById('getExtensionBtn');
       const overlay = document.getElementById('extModalOverlay');
       const closeBtn = document.getElementById('extModalClose');
+      const heroExtBtn = document.getElementById('heroExtensionBtn');
       
       if (btn && overlay) {
         btn.addEventListener('click', () => overlay.classList.add('active'));
@@ -408,6 +412,11 @@
         overlay.addEventListener('click', (e) => {
           if (e.target === overlay) overlay.classList.remove('active');
         });
+        
+        // Hero button also opens extension modal
+        if (heroExtBtn) {
+          heroExtBtn.addEventListener('click', () => overlay.classList.add('active'));
+        }
         
         // Copy URL buttons
         document.querySelectorAll('.ext-copy-url').forEach(btn => {
