@@ -1,0 +1,22 @@
+{
+  "name": "aidock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AIDock — Your AI Tools Dashboard",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "dev:local": "USE_LOCAL_DB=true node server.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.5.0",
+    "sql.js": "^1.10.0",
+    "express": "^4.21.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cookie-parser": "^1.4.6"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIDock — Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>var s=localStorage.getItem('aidock-theme'),p=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',s||p);</script>
+</head>
+<body>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add AI Tool</h2>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <form id="toolForm" autocomplete="off">
+        <input type="hidden" id="editId">
+        <div class="form-group">
+          <label for="toolName">Name *</label>
+          <input type="text" id="toolName" placeholder="e.g. Claude, Codex, Midjourney…" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="toolUrl">Website / Docs URL</label>
+            <input type="url" id="toolUrl" placeholder="https://…">
+          </div>
+          <div class="form-group">
+            <label for="toolPricing">Pricing</label>
+            <select id="toolPricing">
+              <option value="Unknown">Unknown</option>
+              <option value="Free">Free</option>
+              <option value="Freemium">Freemium</option>
+              <option value="Paid">Paid</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="toolCategory">Category</label>
+          <select id="toolCategory">
+            <option value="Coding & Development">💻 Coding & Development</option>
+            <option value="Audio">🎵 Audio</option>
+            <option value="Video & Images">🎬 Video & Images</option>
+            <option value="Writing & Content">✍️ Writing & Content</option>
+            <option value="Workflow Automation">⚙️ Workflow Automation</option>
+            <option value="Research & Analysis">🔬 Research & Analysis</option>
+            <option value="Design & UI">🎨 Design & UI</option>
+            <option value="Chatbots & Assistants">🤖 Chatbots & Assistants</option>
+            <option value="Data & Analytics">📊 Data & Analytics</option>
+            <option value="Other">📦 Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="toolDescription">Description <span class="hint">(auto-detected or manual)</span></label>
+          <textarea id="toolDescription" rows="3" placeholder="A short description will be auto-fetched if left empty…"></textarea>
+          <button type="button" class="btn-secondary btn-sm" id="fetchDescBtn">Auto-detect description</button>
+        </div>
+        <div class="form-group">
+          <label for="toolNotes">My Notes</label>
+          <textarea id="toolNotes" rows="2" placeholder="Your personal comments…"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" id="cancelBtn">Cancel</button>
+          <button type="submit" class="btn-primary">Save Tool</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation -->
+  <div class="modal-overlay" id="deleteOverlay">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Delete Tool</h2>
+        <button class="modal-close" id="deleteClose">&times;</button>
+      </div>
+      <p class="delete-msg">Are you sure you want to remove <strong id="deleteName"></strong>?</p>
+      <div class="form-actions">
+        <button class="btn-secondary" id="deleteCancelBtn">Cancel</button>
+        <button class="btn-danger" id="deleteConfirmBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="logo">
+          <span class="logo-icon">⬡</span>
+          <span class="logo-text">AIDock</span>
+        </div>
+      </div>
+      <div class="topbar-center">
+        <div class="view-toggle" id="viewToggle">
+          <div class="view-toggle-slider"></div>
+          <button class="view-toggle-btn active" data-view="my">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            My View
+          </button>
+          <button class="view-toggle-btn" data-view="social">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Social
+          </button>
+        </div>
+        <div class="search-box">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="searchInput" placeholder="Search tools…">
+        </div>
+      </div>
+      <div class="topbar-right">
+        <input type="file" id="importFile" accept=".csv" style="display:none">
+        <button class="btn-secondary btn-icon" id="importBtn" title="Import CSV">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Import
+        </button>
+        <button class="btn-secondary btn-icon" id="exportBtn" title="Export CSV">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Export
+        </button>
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <div class="user-menu-wrap">
+          <div class="user-avatar" id="userAvatar" title="Account"></div>
+          <div class="user-dropdown" id="userDropdown">
+            <div class="user-dropdown-header">
+              <div class="user-dropdown-avatar-wrap">
+                <div class="user-dropdown-avatar" id="dropdownAvatar"></div>
+                <button class="avatar-change-btn" id="changeAvatarBtn" title="Change photo">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                </button>
+                <input type="file" id="dashboardAvatarInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+              </div>
+              <div class="user-dropdown-name" id="userDropdownName"></div>
+              <div class="user-dropdown-email" id="userDropdownEmail"></div>
+            </div>
+            <div class="user-dropdown-roles" id="userDropdownRoles"></div>
+            <div class="user-dropdown-actions">
+              <button class="user-dropdown-action" id="editRolesBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Edit Roles
+              </button>
+              <button class="user-dropdown-action user-dropdown-signout" id="logoutBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar" id="sidebar">
+        <!-- My View Sidebar Content -->
+        <div id="sidebarMyView">
+        <div class="sidebar-section">
+          <div class="sidebar-label">Categories</div>
+          <div class="sidebar-list" id="categoryFilters">
+            <button class="sidebar-item active" data-filter="All">
+              <span class="sidebar-icon">📁</span> All Tools
+            </button>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <div class="sidebar-label">Pricing</div>
+          <div class="sidebar-list" id="pricingFilters">
+            <button class="sidebar-item pricing active" data-pricing="All">
+              <span class="sidebar-icon">💰</span> All Pricing
+            </button>
+            <button class="sidebar-item pricing" data-pricing="Free">
+              <span class="sidebar-dot dot-free"></span> Free
+            </button>
+            <button class="sidebar-item pricing" data-pricing="Freemium">
+              <span class="sidebar-dot dot-freemium"></span> Freemium
+            </button>
+            <button class="sidebar-item pricing" data-pricing="Paid">
+              <span class="sidebar-dot dot-paid"></span> Paid
+            </button>
+            <button class="sidebar-item pricing" data-pricing="Unknown">
+              <span class="sidebar-dot dot-unknown"></span> Unknown
+            </button>
+          </div>
+        </div>
+        <div class="sidebar-section sidebar-tier">
+          <div class="tier-badge-row">
+            <div class="tier-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              Free Tier
+            </div>
+            <button class="get-pro-btn" id="getProBtn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              Get Pro
+            </button>
+          </div>
+          <div class="tier-counter">
+            <span class="tier-count"><span id="toolCount">0</span> / <span id="toolLimit">10</span> tools</span>
+          </div>
+          <div class="tier-progress-track">
+            <div class="tier-progress-bar" id="toolProgressBar" style="width:0%"></div>
+          </div>
+
+          <!-- Referral Widget -->
+          <div class="referral-widget">
+            <div class="referral-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+              Invite Friends, Get Slots
+            </div>
+            <p class="referral-desc">Invite friends to unlock <strong>+2 tool slots</strong> per friend (up to 5 friends).</p>
+            <div class="referral-progress" id="referralProgress"></div>
+            <div class="referral-link-wrap">
+              <input type="text" class="referral-link-input" id="referralLinkInput" readonly>
+              <button class="referral-copy-btn" id="referralCopyBtn" title="Copy invite link">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <!-- Social View Sidebar Content -->
+        <div id="sidebarSocialView" style="display:none">
+          <div class="sidebar-section">
+            <div class="sidebar-label">Discover</div>
+            <div class="sidebar-list">
+              <button class="sidebar-item active" data-social-filter="all">
+                <span class="sidebar-icon">🌐</span> All
+              </button>
+              <button class="sidebar-item" data-social-filter="trending">
+                <span class="sidebar-icon">🔥</span> Trending
+              </button>
+              <button class="sidebar-item" data-social-filter="top-rated">
+                <span class="sidebar-icon">⭐</span> Top Rated
+              </button>
+            </div>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-label">By Industry</div>
+            <div class="sidebar-list" id="industryFilters">
+              <button class="sidebar-item" data-industry="Marketing">
+                <span class="sidebar-icon">📣</span> Marketing
+              </button>
+              <button class="sidebar-item" data-industry="Design">
+                <span class="sidebar-icon">🎨</span> Design
+              </button>
+              <button class="sidebar-item" data-industry="Engineering">
+                <span class="sidebar-icon">⚙️</span> Engineering
+              </button>
+              <button class="sidebar-item" data-industry="Entrepreneurship">
+                <span class="sidebar-icon">🚀</span> Entrepreneurship
+              </button>
+              <button class="sidebar-item" data-industry="Content">
+                <span class="sidebar-icon">✍️</span> Content
+              </button>
+            </div>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-label">By Category</div>
+            <div class="sidebar-list" id="socialCategoryFilters">
+              <button class="sidebar-item" data-category="Coding">
+                <span class="sidebar-icon">💻</span> Coding
+              </button>
+              <button class="sidebar-item" data-category="Writing">
+                <span class="sidebar-icon">📝</span> Writing
+              </button>
+              <button class="sidebar-item" data-category="Video">
+                <span class="sidebar-icon">🎬</span> Video & Images
+              </button>
+              <button class="sidebar-item" data-category="Audio">
+                <span class="sidebar-icon">🎧</span> Audio
+              </button>
+              <button class="sidebar-item" data-category="Productivity">
+                <span class="sidebar-icon">📊</span> Productivity
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="dashboard" id="dashboard">
+        <div class="dash-hero" id="greeting">
+          <div class="dash-hero-top">
+            <h2 class="greeting-text" id="greetingText">Good afternoon</h2>
+            <p class="greeting-sub" id="greetingSub"></p>
+          </div>
+          <div class="dash-stats">
+            <div class="dash-stat">
+              <span class="dash-stat-num accent" id="statTotal">0</span>
+              <span class="dash-stat-label">Tools Saved</span>
+            </div>
+            <div class="dash-stat">
+              <span class="dash-stat-num" id="statCategories">0</span>
+              <span class="dash-stat-label">Categories</span>
+            </div>
+            <div class="dash-stat">
+              <span class="dash-stat-num" id="statFree">0</span>
+              <span class="dash-stat-label">Free Tools</span>
+            </div>
+            <div class="dash-stat">
+              <span class="dash-stat-num" id="statPaid">0</span>
+              <span class="dash-stat-label">Paid Tools</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- My Stacks -->
+        <div class="stacks-section" id="stacksSection">
+          <div class="stacks-header">
+            <h3 class="stacks-title">📚 My Stacks</h3>
+            <div class="stacks-actions">
+              <button class="btn-add-tool" id="addToolBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Tool
+              </button>
+              <button class="btn-secondary btn-sm" id="createStackBtn">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New Stack
+              </button>
+            </div>
+          </div>
+          <div class="stacks-invite-widget" id="stacksInviteWidget"></div>
+          <div class="stacks-dock" id="stacksDock"></div>
+        </div>
+
+        <!-- Stack Folder Overlay (iOS style) -->
+        <div class="folder-overlay" id="folderOverlay">
+          <div class="folder-backdrop" id="folderBackdrop"></div>
+          <div class="folder-container" id="folderContainer">
+            <div class="folder-header">
+              <h3 class="folder-name" id="folderName"></h3>
+              <div class="folder-actions-top">
+                <button class="folder-share-btn" id="folderShareBtn" title="Share Stack">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                </button>
+                <button class="folder-edit-btn" id="folderEditBtn" title="Edit Stack">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button class="folder-delete-btn" id="folderDeleteBtn" title="Delete Stack">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+                <button class="folder-close-btn" id="folderCloseBtn">✕</button>
+              </div>
+            </div>
+            <p class="folder-desc" id="folderDesc"></p>
+            <!-- Share panel (hidden by default) -->
+            <div class="folder-share-panel" id="folderSharePanel" style="display:none">
+              <div class="share-panel-inner">
+                <div class="share-link-row">
+                  <input type="text" class="share-link-input" id="shareLinkInput" readonly>
+                  <button class="share-copy-btn" id="shareCopyBtn">Copy</button>
+                </div>
+                <div class="share-social-row">
+                  <button class="share-social-btn" id="shareTwitterBtn" title="Share on X/Twitter">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                  </button>
+                  <button class="share-social-btn" id="shareLinkedInBtn" title="Share on LinkedIn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                  </button>
+                  <button class="share-social-btn" id="shareEmailBtn" title="Share via Email">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                  </button>
+                </div>
+                <div class="share-stats-row" id="shareStatsRow">
+                  <span class="share-stat"><strong id="shareViews">0</strong> views</span>
+                  <span class="share-stat"><strong id="shareClones">0</strong> clones</span>
+                </div>
+                <button class="share-unshare-btn" id="shareUnshareBtn">Stop sharing</button>
+              </div>
+            </div>
+            <!-- Stats bar -->
+            <div class="folder-stats" id="folderStats">
+              <span class="folder-stat" id="folderToolCount"></span>
+            </div>
+            <div class="folder-grid" id="folderGrid"></div>
+            <div class="folder-empty" id="folderEmpty">Drag & drop tools here to add them to this stack</div>
+          </div>
+        </div>
+
+        <!-- Stack Create/Edit Modal -->
+        <div class="modal-overlay" id="stackModalOverlay">
+          <div class="modal">
+            <div class="modal-header">
+              <h2 id="stackModalTitle">New Stack</h2>
+              <button class="modal-close" id="stackModalClose">&times;</button>
+            </div>
+            <form id="stackForm" autocomplete="off">
+              <input type="hidden" id="stackEditId">
+              <div class="form-group">
+                <label for="stackName">Name *</label>
+                <input type="text" id="stackName" placeholder="e.g. AI Writing Suite" required>
+              </div>
+              <div class="form-group">
+                <label for="stackDescription">Description</label>
+                <input type="text" id="stackDescription" placeholder="Optional short description">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Color</label>
+                  <div class="color-picker-row">
+                    <input type="color" id="stackColor" value="#0a84ff">
+                    <span class="color-preview" id="stackColorPreview" style="background:#0a84ff"></span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Icon</label>
+                  <div class="icon-picker-row" id="iconPickerRow">
+                    <button type="button" class="icon-option selected" data-icon="📂">📂</button>
+                    <button type="button" class="icon-option" data-icon="🚀">🚀</button>
+                    <button type="button" class="icon-option" data-icon="💡">💡</button>
+                    <button type="button" class="icon-option" data-icon="🎯">🎯</button>
+                    <button type="button" class="icon-option" data-icon="⚡">⚡</button>
+                    <button type="button" class="icon-option" data-icon="🔥">🔥</button>
+                    <button type="button" class="icon-option" data-icon="💻">💻</button>
+                    <button type="button" class="icon-option" data-icon="🎨">🎨</button>
+                    <button type="button" class="icon-option" data-icon="✍️">✍️</button>
+                    <button type="button" class="icon-option" data-icon="🤖">🤖</button>
+                    <button type="button" class="icon-option" data-icon="📊">📊</button>
+                    <button type="button" class="icon-option" data-icon="🔬">🔬</button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" id="stackCancelBtn">Cancel</button>
+                <button type="submit" class="btn-primary">Save Stack</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">⬡</div>
+          <h3>Your dock is empty</h3>
+          <p>Add your first AI tool to get started.</p>
+          <button class="btn-primary" id="emptyAddBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Tool
+          </button>
+        </div>
+        <div class="cards-grid" id="cardsGrid"></div>
+      </main>
+
+      <!-- Social View -->
+      <main class="dashboard social-view" id="socialView" style="display:none">
+
+        <!-- Social Hero Banner -->
+        <div class="social-hero">
+          <div class="social-hero-content">
+            <h2>🌐 Social Hub</h2>
+            <p>Discover what your friends and the community are building with AI.</p>
+          </div>
+          <button class="btn-primary btn-sm" id="socialInviteBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Invite Friends
+          </button>
+        </div>
+
+        <!-- Community Section -->
+        <div class="social-section" id="communitySection">
+          <div class="social-section-header">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              Community
+            </h3>
+          </div>
+          <div class="social-empty">
+            <div class="empty-icon">🧪</div>
+            <h3>Something big is brewing...</h3>
+            <p>We're building a community feed where you'll discover trending tools, top stacks, and the curators behind them. Stay tuned — it's going to be worth the wait.</p>
+          </div>
+        </div>
+
+        <!-- Friends Section -->
+        <div class="social-section">
+          <div class="social-section-header">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Friends
+            </h3>
+            <span class="friends-count" id="friendsCount"></span>
+          </div>
+          <div id="friendsGrid" class="friends-grid"></div>
+          <div id="friendsEmpty" class="social-empty" style="display:none">
+            <div class="empty-icon">👥</div>
+            <h3>No friends yet</h3>
+            <p>Invite friends to AIDock to see them here and explore each other's tools &amp; stacks.</p>
+            <button class="btn-add-tool" id="socialInviteBtnEmpty">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Invite a Friend
+            </button>
+          </div>
+        </div>
+      </main>
+
+      <!-- Friend Profile Overlay -->
+      <div class="friend-profile-overlay" id="friendProfileOverlay" style="display:none">
+        <div class="friend-profile-panel">
+          <button class="friend-profile-back" id="friendProfileBack">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            Back to Friends
+          </button>
+          <div class="friend-profile-header" id="friendProfileHeader"></div>
+          <div class="friend-profile-tabs" id="friendProfileTabs">
+            <div class="friend-tab-slider"></div>
+            <button class="friend-tab active" data-tab="tools">Tools</button>
+            <button class="friend-tab" data-tab="stacks">Shared Stacks</button>
+          </div>
+          <div class="friend-profile-content" id="friendToolsTab"></div>
+          <div class="friend-profile-content" id="friendStacksTab" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pro Paywall Modal -->
+  <!-- Limit Reached Paywall -->
+  <div class="pro-overlay" id="limitOverlay">
+    <div class="pro-modal limit-modal">
+      <button class="pro-close" id="limitClose">&times;</button>
+      <div class="pro-header">
+        <div class="limit-icon">🚫</div>
+        <h2>You've used all your free slots</h2>
+        <p>You've saved <strong id="limitCount">0</strong> / <strong id="limitMax">0</strong> tools — upgrade to keep adding.</p>
+      </div>
+
+      <div class="limit-options">
+        <!-- Option 1: Get Pro -->
+        <div class="limit-option limit-option-pro">
+          <div class="limit-option-badge">Recommended</div>
+          <div class="limit-option-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <h3>Get Pro — Unlimited Everything</h3>
+          <div class="pro-features" style="text-align:left;margin:8px 0 14px">
+            <div class="pro-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Unlimited</strong> tool slots</span></div>
+            <div class="pro-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Unlimited</strong> stacks</span></div>
+            <div class="pro-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span>Custom <strong>themes</strong> & branding</span></div>
+            <div class="pro-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span>Advanced <strong>analytics</strong></span></div>
+          </div>
+          <div class="pro-pricing" style="margin:0">
+            <div class="pro-plan pro-plan-monthly">
+              <div class="pro-plan-name">Monthly</div>
+              <div class="pro-plan-price">$4.99<span>/mo</span></div>
+              <button class="pro-plan-btn limit-pro-btn">Start Monthly</button>
+            </div>
+            <div class="pro-plan pro-plan-yearly pro-plan-popular">
+              <div class="pro-plan-tag">Save 33%</div>
+              <div class="pro-plan-name">Yearly</div>
+              <div class="pro-plan-price">$39.99<span>/yr</span></div>
+              <button class="pro-plan-btn pro-plan-btn-primary limit-pro-btn">Start Yearly</button>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--text-secondary);margin:10px 0 0;text-align:center">7-day free trial · Cancel anytime</p>
+        </div>
+
+        <div class="limit-divider"><span>or</span></div>
+
+        <!-- Option 2: Invite Friends -->
+        <div class="limit-option limit-option-invite">
+          <div class="limit-option-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          </div>
+          <h3>Invite Friends</h3>
+          <p class="limit-option-desc">Get <strong>+2 free slots</strong> for each friend who joins</p>
+          <div id="limitReferralProgress"></div>
+          <div class="limit-invite-box">
+            <input type="text" id="limitInviteLink" readonly>
+            <button class="btn-add-tool" id="limitCopyBtn" style="padding:8px 14px;font-size:12px;border-radius:8px">Copy Link</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pro-overlay" id="proOverlay">
+    <div class="pro-modal">
+      <button class="pro-close" id="proClose">&times;</button>
+      <div class="pro-header">
+        <div class="pro-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <h2>AIDock <span>Pro</span></h2>
+        <p>Supercharge your AI toolkit</p>
+      </div>
+      <div class="pro-features">
+        <div class="pro-feature">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Unlimited</strong> tool slots</span>
+        </div>
+        <div class="pro-feature">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Unlimited</strong> stacks</span>
+        </div>
+        <div class="pro-feature">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Priority <strong>auto-detect</strong> descriptions</span>
+        </div>
+        <div class="pro-feature">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Custom <strong>stack themes</strong> & branding</span>
+        </div>
+        <div class="pro-feature">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Advanced <strong>analytics</strong> on shared stacks</span>
+        </div>
+        <div class="pro-feature">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Early access</strong> to new features</span>
+        </div>
+      </div>
+      <div class="pro-pricing">
+        <div class="pro-plan pro-plan-monthly">
+          <div class="pro-plan-name">Monthly</div>
+          <div class="pro-plan-price">$4.99<span>/mo</span></div>
+          <button class="pro-plan-btn">Start Monthly</button>
+        </div>
+        <div class="pro-plan pro-plan-yearly pro-plan-popular">
+          <div class="pro-plan-tag">Save 33%</div>
+          <div class="pro-plan-name">Yearly</div>
+          <div class="pro-plan-price">$39.99<span>/yr</span></div>
+          <button class="pro-plan-btn pro-plan-btn-primary">Start Yearly</button>
+        </div>
+      </div>
+      <p class="pro-footer">7-day free trial · Cancel anytime</p>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

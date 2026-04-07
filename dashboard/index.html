@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIDock — Your AI Tools Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Welcome / Onboarding Modal -->
+  <div class="modal-overlay" id="welcomeOverlay">
+    <div class="modal welcome-modal">
+      <div class="welcome-hero">
+        <div class="welcome-logo">⬡</div>
+        <h1 class="welcome-title">Welcome to <span>AIDock</span></h1>
+        <p class="welcome-tagline">Stop losing track of the AI tools that matter.</p>
+      </div>
+      <div class="welcome-body">
+        <p class="welcome-desc">Save tools you discover, organise them your way, and share your curated AI stack with friends and community.</p>
+        <div class="welcome-features">
+          <div class="welcome-feature"><span>🗂</span> Categorise & filter</div>
+          <div class="welcome-feature"><span>📥</span> Import & export</div>
+          <div class="welcome-feature"><span>🔍</span> Auto-detect descriptions</div>
+          <div class="welcome-feature"><span>💬</span> Add personal notes</div>
+        </div>
+        <form id="welcomeForm" autocomplete="off">
+          <div id="signupView">
+            <div class="form-group">
+              <label for="welcomeName">Your name</label>
+              <input type="text" id="welcomeName" placeholder="What should we call you?" required maxlength="40">
+            </div>
+            <div class="form-group">
+              <label for="welcomeEmail">Email</label>
+              <input type="email" id="welcomeEmail" placeholder="you@example.com" required maxlength="100">
+            </div>
+            <div class="form-group">
+              <label for="welcomePassword">Password</label>
+              <input type="password" id="welcomePassword" placeholder="Create a password (min 6 chars)" required minlength="6" maxlength="128">
+            </div>
+            <button type="submit" class="btn-primary btn-welcome">Join AIDock — It's free ✨</button>
+            <p class="welcome-toggle">Already have an account? <a href="#" id="showLogin">Log in</a></p>
+          </div>
+          <div id="loginView" style="display:none">
+            <div class="form-group">
+              <label for="loginEmail">Email</label>
+              <input type="email" id="loginEmail" placeholder="you@example.com" required maxlength="100">
+            </div>
+            <div class="form-group">
+              <label for="loginPassword">Password</label>
+              <input type="password" id="loginPassword" placeholder="Your password" required minlength="6" maxlength="128">
+            </div>
+            <button type="submit" class="btn-primary btn-welcome">Log in to AIDock 🔓</button>
+            <p class="welcome-toggle">New here? <a href="#" id="showSignup">Create an account</a></p>
+          </div>
+        </form>
+        <p class="welcome-footnote">Your data stays in your browser. Community & sharing features coming soon.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add AI Tool</h2>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <form id="toolForm" autocomplete="off">
+        <input type="hidden" id="editId">
+        <div class="form-group">
+          <label for="toolName">Name *</label>
+          <input type="text" id="toolName" placeholder="e.g. Claude, Codex, Midjourney…" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="toolUrl">Website / Docs URL</label>
+            <input type="url" id="toolUrl" placeholder="https://…">
+          </div>
+          <div class="form-group">
+            <label for="toolPricing">Pricing</label>
+            <select id="toolPricing">
+              <option value="Unknown">Unknown</option>
+              <option value="Free">Free</option>
+              <option value="Freemium">Freemium</option>
+              <option value="Paid">Paid</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="toolCategory">Category</label>
+          <select id="toolCategory">
+            <option value="Coding & Development">💻 Coding & Development</option>
+            <option value="Audio">🎵 Audio</option>
+            <option value="Video & Images">🎬 Video & Images</option>
+            <option value="Writing & Content">✍️ Writing & Content</option>
+            <option value="Workflow Automation">⚙️ Workflow Automation</option>
+            <option value="Research & Analysis">🔬 Research & Analysis</option>
+            <option value="Design & UI">🎨 Design & UI</option>
+            <option value="Chatbots & Assistants">🤖 Chatbots & Assistants</option>
+            <option value="Data & Analytics">📊 Data & Analytics</option>
+            <option value="Other">📦 Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="toolDescription">Description <span class="hint">(auto-detected or manual)</span></label>
+          <textarea id="toolDescription" rows="3" placeholder="A short description will be auto-fetched if left empty…"></textarea>
+          <button type="button" class="btn-secondary btn-sm" id="fetchDescBtn">Auto-detect description</button>
+        </div>
+        <div class="form-group">
+          <label for="toolNotes">My Notes</label>
+          <textarea id="toolNotes" rows="2" placeholder="Your personal comments…"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" id="cancelBtn">Cancel</button>
+          <button type="submit" class="btn-primary">Save Tool</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation -->
+  <div class="modal-overlay" id="deleteOverlay">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Delete Tool</h2>
+        <button class="modal-close" id="deleteClose">&times;</button>
+      </div>
+      <p class="delete-msg">Are you sure you want to remove <strong id="deleteName"></strong>?</p>
+      <div class="form-actions">
+        <button class="btn-secondary" id="deleteCancelBtn">Cancel</button>
+        <button class="btn-danger" id="deleteConfirmBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="logo">
+          <span class="logo-icon">⬡</span>
+          <span class="logo-text">AIDock</span>
+        </div>
+      </div>
+      <div class="topbar-center">
+        <div class="search-box">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="searchInput" placeholder="Search tools…">
+        </div>
+      </div>
+      <div class="topbar-right">
+        <input type="file" id="importFile" accept=".csv" style="display:none">
+        <button class="btn-secondary btn-icon" id="importBtn" title="Import CSV">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Import
+        </button>
+        <button class="btn-secondary btn-icon" id="exportBtn" title="Export CSV">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Export
+        </button>
+        <button class="btn-primary" id="addToolBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Tool
+        </button>
+        <div class="user-menu-wrap">
+          <div class="user-avatar" id="userAvatar" title="Signed in"></div>
+          <div class="user-dropdown" id="userDropdown">
+            <div class="user-dropdown-name" id="userDropdownName"></div>
+            <div class="user-dropdown-email" id="userDropdownEmail"></div>
+            <hr>
+            <button class="user-dropdown-btn" id="logoutBtn">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-label">Categories</div>
+          <div class="sidebar-list" id="categoryFilters">
+            <button class="sidebar-item active" data-filter="All">
+              <span class="sidebar-icon">📁</span> All Tools
+            </button>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <div class="sidebar-label">Pricing</div>
+          <div class="sidebar-list" id="pricingFilters">
+            <button class="sidebar-item pricing active" data-pricing="All">
+              <span class="sidebar-icon">💰</span> All Pricing
+            </button>
+            <button class="sidebar-item pricing" data-pricing="Free">
+              <span class="sidebar-dot dot-free"></span> Free
+            </button>
+            <button class="sidebar-item pricing" data-pricing="Freemium">
+              <span class="sidebar-dot dot-freemium"></span> Freemium
+            </button>
+            <button class="sidebar-item pricing" data-pricing="Paid">
+              <span class="sidebar-dot dot-paid"></span> Paid
+            </button>
+            <button class="sidebar-item pricing" data-pricing="Unknown">
+              <span class="sidebar-dot dot-unknown"></span> Unknown
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="dashboard" id="dashboard">
+      <div class="greeting" id="greeting">
+        <h2 class="greeting-text" id="greetingText">Good afternoon</h2>
+        <p class="greeting-sub" id="greetingSub">Your AI tool vault holds <strong id="toolCount">0</strong> tools</p>
+      </div>
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">⬡</div>
+        <h3>Your dock is empty</h3>
+        <p>Add your first AI tool to get started.</p>
+        <button class="btn-primary" id="emptyAddBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Tool
+        </button>
+      </div>
+      <div class="cards-grid" id="cardsGrid"></div>
+    </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

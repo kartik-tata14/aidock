@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIDock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Auth Screen -->
+  <div id="authView" class="view">
+    <div class="auth-container">
+      <div class="auth-header">
+        <div class="brand">
+          <span class="brand-icon">⬡</span>
+          <span class="brand-text">AIDock</span>
+        </div>
+        <p class="auth-tagline">Your AI toolbox, one click away</p>
+      </div>
+      
+      <form id="loginForm" class="auth-form">
+        <div class="error" id="authError"></div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="you@example.com" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-primary" id="loginBtn">
+          <span class="btn-text">Sign In</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+      
+      <div class="auth-footer">
+        <span>New to AIDock?</span>
+        <a href="#" id="openSignup">Create account</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Tool Screen -->
+  <div id="toolView" class="view" style="display:none">
+    <header class="topbar">
+      <div class="brand-sm">
+        <span class="brand-icon-sm">⬡</span>
+        <span class="brand-text-sm">AIDock</span>
+      </div>
+      <div class="topbar-actions">
+        <a href="#" class="dashboard-link" id="openDashboard" title="Open Dashboard">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+        <div class="user-pill">
+          <span class="user-avatar" id="userAvatar">U</span>
+          <span class="user-name" id="userName">User</span>
+          <button class="btn-logout" id="logoutBtn" title="Sign out">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Slots Indicator -->
+    <div class="slots-indicator" id="slotsIndicator">
+      <div class="slots-bar">
+        <div class="slots-fill" id="slotsFill"></div>
+      </div>
+      <span class="slots-text" id="slotsText">0 / 10 slots</span>
+    </div>
+
+    <!-- Add Tool Form -->
+    <div class="add-section">
+      <div class="section-header">
+        <span class="section-title">Add to Dock</span>
+      </div>
+      
+      <div id="toolSuccess" class="success" style="display:none">
+        <span class="success-icon">✓</span>
+        <span>Tool saved to your dock!</span>
+      </div>
+      <div id="toolError" class="error"></div>
+      
+      <form id="toolForm">
+        <div class="field">
+          <label for="toolName">Name</label>
+          <input type="text" id="toolName" placeholder="e.g. ChatGPT" required>
+        </div>
+        <div class="field">
+          <label for="toolUrl">URL</label>
+          <input type="url" id="toolUrl" placeholder="https://...">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="toolCategory">Category</label>
+            <select id="toolCategory">
+              <option value="Coding & Development">💻 Coding</option>
+              <option value="Writing & Content">✍️ Writing</option>
+              <option value="Video & Images">🎬 Video & Images</option>
+              <option value="Audio">🎵 Audio</option>
+              <option value="Design & UI">🎨 Design</option>
+              <option value="Chatbots & Assistants">🤖 Chatbots</option>
+              <option value="Workflow Automation">⚡ Automation</option>
+              <option value="Research & Analysis">🔬 Research</option>
+              <option value="Data & Analytics">📊 Data</option>
+              <option value="Other" selected>📦 Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="toolPricing">Pricing</label>
+            <select id="toolPricing">
+              <option value="Unknown">Unknown</option>
+              <option value="Free">Free</option>
+              <option value="Freemium">Freemium</option>
+              <option value="Paid">Paid</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="toolDescription">
+            Description
+            <button type="button" class="btn-detect" id="detectBtn">⚡ Auto-detect</button>
+          </label>
+          <textarea id="toolDescription" rows="2" placeholder="What does this tool do?"></textarea>
+        </div>
+        <div class="field">
+          <label for="toolNotes">Notes <span class="label-hint">(optional)</span></label>
+          <textarea id="toolNotes" rows="1" placeholder="Your personal notes…"></textarea>
+        </div>
+        <button type="submit" class="btn-primary" id="saveBtn">
+          <span class="btn-text">Save to Dock</span>
+          <span class="btn-icon">⬡</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Recently Added Section -->
+    <div class="recent-section" id="recentSection" style="display:none">
+      <div class="section-header">
+        <span class="section-title">Recently Added</span>
+        <button type="button" class="btn-collapse" id="toggleRecent" title="Toggle">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+      <div class="recent-list" id="recentList"></div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

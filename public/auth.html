@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIDock — Sign In</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>var s=localStorage.getItem('aidock-theme'),p=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',s||p);</script>
+</head>
+<body class="auth-body-v2">
+
+  <!-- Navigation -->
+  <nav class="auth-nav">
+    <a href="/" class="logo">
+      <span class="logo-icon">⬡</span>
+      <span class="logo-text">AIDock</span>
+    </a>
+  </nav>
+
+  <div class="auth-layout">
+    <!-- Left: Hero Section -->
+    <div class="auth-hero-section">
+      <div class="auth-hero-glow"></div>
+      <div class="auth-hero-content">
+        <div class="auth-badge">One dock for all your AI tools</div>
+        <h1>Save, organise & share<br><span class="auth-gradient">your AI toolkit</span></h1>
+        <p>Join thousands of AI-native builders who dock their favourite tools, create curated stacks, and discover what others are using.</p>
+        
+        <!-- Mini Preview -->
+        <div class="auth-preview">
+          <div class="auth-preview-bar">
+            <span class="preview-dot"></span><span class="preview-dot"></span><span class="preview-dot"></span>
+            <span class="auth-preview-title">My AI Dock</span>
+          </div>
+          <div class="auth-preview-cards">
+            <div class="auth-mini-card">
+              <img src="https://www.google.com/s2/favicons?domain=claude.ai&sz=64" alt="">
+              <span>Claude</span>
+            </div>
+            <div class="auth-mini-card">
+              <img src="https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64" alt="">
+              <span>ChatGPT</span>
+            </div>
+            <div class="auth-mini-card">
+              <img src="https://www.google.com/s2/favicons?domain=midjourney.com&sz=64" alt="">
+              <span>Midjourney</span>
+            </div>
+            <div class="auth-mini-card">
+              <img src="https://www.google.com/s2/favicons?domain=perplexity.ai&sz=64" alt="">
+              <span>Perplexity</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="auth-trust">Trusted by Native AI-Builders</div>
+      </div>
+    </div>
+
+    <!-- Right: Auth Form -->
+    <div class="auth-form-section">
+      <div class="auth-form-card">
+        <!-- Signup form -->
+        <div id="signupView">
+          <h2>Create your account</h2>
+          <p class="auth-form-sub">Start building your AI toolkit today ✨</p>
+          <form id="signupForm" autocomplete="off">
+            <div class="form-group" style="text-align:center">
+              <div class="avatar-upload" id="avatarUpload" title="Upload profile photo (optional)">
+                <div class="avatar-upload-preview" id="avatarPreview">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div class="avatar-upload-badge">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </div>
+              </div>
+              <input type="file" id="signupAvatar" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+              <div class="avatar-label">Profile photo <span>(optional)</span></div>
+            </div>
+            <div class="form-group">
+              <label for="signupName">Your name</label>
+              <input type="text" id="signupName" placeholder="What should we call you?" required maxlength="40">
+            </div>
+            <div class="form-group">
+              <label for="signupEmail">Email</label>
+              <input type="email" id="signupEmail" placeholder="you@example.com" required maxlength="100">
+            </div>
+            <div class="form-group">
+              <label for="signupPassword">Password</label>
+              <input type="password" id="signupPassword" placeholder="Min 6 characters" required minlength="6" maxlength="128">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="signupPrimaryRole">Primary Role</label>
+                <select id="signupPrimaryRole" required>
+                  <option value="" disabled selected>Select role</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Frontend Development">Frontend Dev</option>
+                  <option value="Backend Development">Backend Dev</option>
+                  <option value="Full Stack Development">Full Stack Dev</option>
+                  <option value="UI/UX Design">UI/UX Design</option>
+                  <option value="Graphic Design">Graphic Design</option>
+                  <option value="Data Science">Data Science</option>
+                  <option value="Data Analytics">Data Analytics</option>
+                  <option value="Product Management">Product Management</option>
+                  <option value="Project Management">Project Management</option>
+                  <option value="Content Writing">Content Writing</option>
+                  <option value="Copywriting">Copywriting</option>
+                  <option value="Sales">Sales</option>
+                  <option value="Customer Support">Customer Support</option>
+                  <option value="HR / People Ops">HR / People Ops</option>
+                  <option value="Finance / Accounting">Finance / Accounting</option>
+                  <option value="Legal">Legal</option>
+                  <option value="DevOps / SRE">DevOps / SRE</option>
+                  <option value="Cybersecurity">Cybersecurity</option>
+                  <option value="AI / ML Engineering">AI / ML Engineering</option>
+                  <option value="Research">Research</option>
+                  <option value="Education / Training">Education / Training</option>
+                  <option value="Video / Audio Production">Video / Audio</option>
+                  <option value="Consulting">Consulting</option>
+                  <option value="Founder / Entrepreneur">Founder / Entrepreneur</option>
+                  <option value="Student">Student</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="signupSecondaryRole">Secondary <span class="optional">(opt.)</span></label>
+                <select id="signupSecondaryRole">
+                  <option value="" selected>None</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Frontend Development">Frontend Dev</option>
+                  <option value="Backend Development">Backend Dev</option>
+                  <option value="Full Stack Development">Full Stack Dev</option>
+                  <option value="UI/UX Design">UI/UX Design</option>
+                  <option value="Graphic Design">Graphic Design</option>
+                  <option value="Data Science">Data Science</option>
+                  <option value="Data Analytics">Data Analytics</option>
+                  <option value="Product Management">Product Management</option>
+                  <option value="Project Management">Project Management</option>
+                  <option value="Content Writing">Content Writing</option>
+                  <option value="Copywriting">Copywriting</option>
+                  <option value="Sales">Sales</option>
+                  <option value="Customer Support">Customer Support</option>
+                  <option value="HR / People Ops">HR / People Ops</option>
+                  <option value="Finance / Accounting">Finance / Accounting</option>
+                  <option value="Legal">Legal</option>
+                  <option value="DevOps / SRE">DevOps / SRE</option>
+                  <option value="Cybersecurity">Cybersecurity</option>
+                  <option value="AI / ML Engineering">AI / ML Engineering</option>
+                  <option value="Research">Research</option>
+                  <option value="Education / Training">Education / Training</option>
+                  <option value="Video / Audio Production">Video / Audio</option>
+                  <option value="Consulting">Consulting</option>
+                  <option value="Founder / Entrepreneur">Founder / Entrepreneur</option>
+                  <option value="Student">Student</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div id="signupError" class="form-error"></div>
+            <button type="submit" class="btn-primary btn-auth-v2">Create Account</button>
+          </form>
+          <p class="auth-toggle-v2">Already have an account? <a href="#" id="showLogin">Log in</a></p>
+        </div>
+
+        <!-- Login form -->
+        <div id="loginView" style="display:none">
+          <h2>Welcome back</h2>
+          <p class="auth-form-sub">Log in to your AIDock dashboard 🔓</p>
+          <form id="loginForm" autocomplete="off">
+            <div class="form-group">
+              <label for="loginEmail">Email</label>
+              <input type="email" id="loginEmail" placeholder="you@example.com" required maxlength="100">
+            </div>
+            <div class="form-group">
+              <label for="loginPassword">Password</label>
+              <input type="password" id="loginPassword" placeholder="Your password" required minlength="6" maxlength="128">
+            </div>
+            <div id="loginError" class="form-error"></div>
+            <button type="submit" class="btn-primary btn-auth-v2">Log In</button>
+          </form>
+          <p class="auth-toggle-v2">New here? <a href="#" id="showSignup">Create an account</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+</body>
+</html>

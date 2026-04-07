@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shared Stack — AIDock</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .shared-page {
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; padding: 40px 20px 60px;
+    }
+    .shared-topbar {
+      width: 100%; max-width: 720px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    .shared-logo {
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none; color: var(--text); font-weight: 700; font-size: 16px;
+    }
+    .shared-logo svg { width: 28px; height: 28px; }
+    .shared-cta { display: flex; align-items: center; gap: 10px; }
+    .shared-cta .theme-toggle { width: 32px; height: 32px; }
+    .shared-cta .btn-sm { margin-top: 0; padding: 7px 14px; }
+
+    .shared-hero {
+      width: 100%; max-width: 720px;
+      border-radius: 24px; padding: 32px; position: relative; overflow: hidden;
+      margin-bottom: 28px;
+    }
+    .shared-hero-bg {
+      position: absolute; inset: 0;
+      opacity: .12; border-radius: 24px;
+    }
+    .shared-hero-content { position: relative; z-index: 1; }
+    .shared-hero-icon {
+      font-size: 40px; margin-bottom: 12px;
+      width: 64px; height: 64px; border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,.15); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.1);
+    }
+    [data-theme="dark"] .shared-hero-icon {
+      background: rgba(255,255,255,.08);
+    }
+    .shared-hero-title {
+      font-size: 28px; font-weight: 800; margin-bottom: 6px;
+      color: var(--text);
+    }
+    .shared-hero-desc {
+      font-size: 14px; color: var(--text-secondary); line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .shared-hero-desc:empty { display: none; }
+    .shared-creator {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 18px;
+    }
+    .shared-creator-avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+      border: 3px solid var(--surface-solid);
+      box-shadow: 0 4px 12px rgba(0,0,0,.15);
+      background-size: cover;
+      background-position: center;
+    }
+    .shared-creator-info {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .shared-creator-label {
+      font-size: 11px; color: var(--text-secondary); text-transform: uppercase;
+      letter-spacing: .5px; font-weight: 500;
+    }
+    .shared-creator-name {
+      font-size: 15px; font-weight: 600; color: var(--text);
+    }
+    .shared-meta {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-secondary);
+    }
+    .shared-meta-item {
+      display: flex; align-items: center; gap: 5px;
+    }
+    .shared-meta-item svg { width: 14px; height: 14px; opacity: .6; }
+    .shared-actions {
+      display: flex; gap: 10px; margin-top: 20px;
+    }
+    .btn-clone {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 10px; padding: 10px 18px; font-size: 13px;
+      font-weight: 600; cursor: pointer; transition: all .15s;
+    }
+    .btn-clone:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn-clone:disabled { opacity: .5; cursor: default; transform: none; filter: none; }
+    .btn-copy-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface-solid); color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 18px; font-size: 13px;
+      font-weight: 500; cursor: pointer; transition: all .15s;
+    }
+    .btn-copy-link:hover { border-color: var(--accent); }
+
+    .shared-tools {
+      width: 100%; max-width: 720px;
+    }
+    .shared-tools-header {
+      font-size: 15px; font-weight: 600; color: var(--text-secondary);
+      margin-bottom: 14px; text-transform: uppercase; letter-spacing: .3px;
+    }
+    .shared-tools-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .shared-tool-card {
+      background: var(--surface-solid); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column;
+      gap: 10px; transition: all .2s; position: relative;
+    }
+    .shared-tool-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,.06);
+      border-color: rgba(10,132,255,.25);
+    }
+    .shared-tool-top { display: flex; align-items: center; gap: 12px; }
+    .shared-tool-favicon {
+      width: 40px; height: 40px; border-radius: 12px; object-fit: contain;
+      background: var(--accent-soft); flex-shrink: 0;
+    }
+    .shared-tool-fallback {
+      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+      background: var(--accent-soft); display: flex; align-items: center;
+      justify-content: center; font-weight: 700; font-size: 14px; color: var(--accent);
+    }
+    .shared-tool-info { min-width: 0; }
+    .shared-tool-name {
+      font-size: 14px; font-weight: 600; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .shared-tool-domain {
+      font-size: 11px; color: var(--text-secondary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .shared-tool-desc {
+      font-size: 12px; color: var(--text-secondary); line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .shared-tool-desc:empty { display: none; }
+    .shared-tool-notes {
+      font-size: 11px; color: var(--accent); line-height: 1.4;
+      background: var(--accent-soft); border-radius: 8px; padding: 6px 10px;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .shared-tool-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+    .shared-tool-badges .badge {
+      font-size: 10px; padding: 3px 8px; border-radius: 6px;
+      background: var(--accent-soft); color: var(--accent); font-weight: 600;
+    }
+    .shared-tool-link {
+      font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 500;
+      margin-top: auto;
+    }
+    .shared-tool-link:hover { text-decoration: underline; }
+
+    .shared-empty {
+      text-align: center; padding: 48px 20px; color: var(--text-secondary);
+    }
+    .shared-404 {
+      text-align: center; padding: 80px 20px;
+    }
+    .shared-404 h2 { font-size: 24px; margin-bottom: 8px; }
+    .shared-404 p { color: var(--text-secondary); }
+
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: var(--surface-solid); border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px 20px; font-size: 13px; font-weight: 500;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12); z-index: 9999;
+      transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+      opacity: 0; pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* Gated blur for unauthenticated users */
+    .shared-tools-gated {
+      position: relative;
+    }
+    .shared-tools-gated .shared-tools-grid {
+      mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0,0,0,.5) 60%, rgba(0,0,0,.15) 80%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, rgba(0,0,0,.5) 60%, rgba(0,0,0,.15) 80%, transparent 100%);
+    }
+    .shared-tools-gated .shared-tool-card:nth-child(n+2) {
+      filter: blur(1.5px); pointer-events: none; user-select: none;
+    }
+    .shared-tools-gated .shared-tool-card:nth-child(n+3) {
+      filter: blur(3px); pointer-events: none; user-select: none;
+    }
+    .gate-overlay {
+      position: absolute; top: 60px; left: 0; right: 0; bottom: 0;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: flex-start; padding: 40px 24px 40px;
+      text-align: center; z-index: 10;
+      background: linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--bg) 40%, transparent) 15%, color-mix(in srgb, var(--bg) 80%, transparent) 35%, var(--bg) 60%);
+    }
+    .gate-card {
+      background: var(--surface-solid); border: 1px solid var(--border);
+      border-radius: 18px; padding: 24px 22px; max-width: 330px; width: 100%;
+      box-shadow: 0 12px 40px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06);
+    }
+    [data-theme="dark"] .gate-card {
+      box-shadow: 0 12px 40px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.15);
+    }
+    .gate-icon {
+      width: 44px; height: 44px; border-radius: 13px;
+      background: linear-gradient(135deg, var(--accent), #5e5ce6);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px; box-shadow: 0 4px 16px rgba(10,132,255,.25);
+    }
+    .gate-icon svg { width: 21px; height: 21px; color: #fff; }
+    .gate-title {
+      font-size: 17px; font-weight: 800; color: var(--text); margin-bottom: 6px;
+    }
+    .gate-desc {
+      font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;
+      max-width: 280px; line-height: 1.5; margin-left: auto; margin-right: auto;
+    }
+    .gate-actions { display: flex; flex-direction: column; gap: 8px; }
+    .gate-actions .btn-primary {
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+      padding: 10px 20px; font-size: 13px; border-radius: 10px; font-weight: 600;
+      width: 100%; background: linear-gradient(135deg, var(--accent), #5e5ce6); color: #fff; border: none;
+      box-shadow: 0 4px 12px rgba(10,132,255,.3); transition: transform .15s, box-shadow .15s;
+    }
+    .gate-actions .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(10,132,255,.35); }
+    .gate-actions .btn-secondary {
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+      padding: 8px 20px; font-size: 12px; width: 100%; color: var(--text-secondary);
+    }
+    .gate-actions .btn-secondary:hover { color: var(--text); }
+    .gate-features {
+      display: flex; justify-content: center; gap: 12px; margin-bottom: 14px;
+      font-size: 10px; color: var(--text-secondary);
+    }
+    .gate-feature {
+      display: flex; align-items: center; gap: 4px;
+    }
+    .gate-feature svg { width: 13px; height: 13px; color: var(--accent); flex-shrink: 0; }
+  </style>
+  <script>
+    // Theme init
+    (function(){
+      const s = localStorage.getItem('aidock-theme');
+      const p = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', s || p);
+    })();
+  </script>
+</head>
+<body>
+  <div class="shared-page" id="page">
+    <div class="shared-topbar">
+      <a href="/" class="shared-logo">
+        <svg viewBox="0 0 100 100" fill="none"><rect width="100" height="100" rx="22" fill="#0a84ff"/><text x="50" y="62" text-anchor="middle" font-size="44" font-weight="800" fill="#fff" font-family="Inter,sans-serif">⬡</text></svg>
+        AIDock
+      </a>
+      <div class="shared-cta">
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a id="topbarSignIn" href="/auth" class="btn-secondary btn-sm">Sign In</a>
+        <a id="topbarGetStarted" href="/auth" class="btn-primary btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;padding:8px 14px;font-size:12px;border-radius:8px;">Get Started</a>
+      </div>
+    </div>
+    <div id="content"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Theme toggle
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('aidock-theme', next);
+    });
+
+    // Update auth links with redirect parameter
+    const authRedirect = `/auth?redirect=${encodeURIComponent(window.location.pathname)}`;
+    const signInLink = document.getElementById('topbarSignIn');
+    const getStartedLink = document.getElementById('topbarGetStarted');
+    if (signInLink) signInLink.href = authRedirect;
+    if (getStartedLink) getStartedLink.href = authRedirect;
+
+    const slug = window.location.pathname.split('/').pop();
+    const contentEl = document.getElementById('content');
+    const toastEl = document.getElementById('toast');
+    let isAuthenticated = false;
+
+    // Check auth silently
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) { isAuthenticated = true; }
+      } catch {}
+    }
+
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(() => toastEl.classList.remove('show'), 2500);
+    }
+
+    function esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str || '';
+      return d.innerHTML;
+    }
+
+    async function load() {
+      await checkAuth();
+      // If authenticated, swap topbar CTA to dashboard link
+      if (isAuthenticated) {
+        // Keep theme toggle, replace only the auth links
+        const cta = document.querySelector('.shared-cta');
+        cta.querySelectorAll('a').forEach(a => a.remove());
+        const link = document.createElement('a');
+        link.href = '/dashboard';
+        link.className = 'btn-primary btn-sm';
+        link.style.cssText = 'text-decoration:none;display:inline-flex;align-items:center;padding:8px 14px;font-size:12px;border-radius:8px;';
+        link.textContent = 'Go to Dashboard';
+        cta.appendChild(link);
+      }
+      try {
+        const res = await fetch(`/api/stacks/public/${slug}`);
+        if (!res.ok) throw new Error('not found');
+        const { stack } = await res.json();
+        render(stack);
+      } catch {
+        contentEl.innerHTML = `<div class="shared-404"><h2>Stack not found</h2><p>This stack may have been unshared or deleted.</p><a href="/" class="btn-primary" style="margin-top:16px;display:inline-block;text-decoration:none;padding:10px 20px;border-radius:10px;font-size:13px;">Go to AIDock</a></div>`;
+      }
+    }
+
+    function render(stack) {
+      const toolsHtml = stack.tools.map(t => {
+        const domain = t.url ? t.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : '';
+        const faviconHtml = domain
+          ? `<img class="shared-tool-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : '';
+        const fallback = `<div class="shared-tool-fallback" ${domain ? 'style="display:none"' : ''}>${esc(t.name.slice(0,2))}</div>`;
+        return `
+          <div class="shared-tool-card">
+            <div class="shared-tool-top">
+              ${faviconHtml}${fallback}
+              <div class="shared-tool-info">
+                <div class="shared-tool-name">${esc(t.name)}</div>
+                ${domain ? `<div class="shared-tool-domain">${esc(domain)}</div>` : ''}
+              </div>
+            </div>
+            <div class="shared-tool-desc">${esc(t.description)}</div>
+            ${t.notes ? `<div class="shared-tool-notes">💬 ${esc(t.notes)}</div>` : ''}
+            <div class="shared-tool-badges">
+              <span class="badge">${esc(t.category)}</span>
+              <span class="badge" style="background:${t.pricing==='Free'?'rgba(52,199,89,.1)':t.pricing==='Paid'?'rgba(255,59,48,.1)':'var(--accent-soft)'};color:${t.pricing==='Free'?'#34c759':t.pricing==='Paid'?'#ff3b30':'var(--accent)'}">${esc(t.pricing)}</span>
+            </div>
+            ${t.url ? `<a class="shared-tool-link" href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">Visit tool ↗</a>` : ''}
+          </div>`;
+      }).join('');
+
+      contentEl.innerHTML = `
+        <div class="shared-hero" style="background:var(--surface-solid);border:1px solid var(--border)">
+          <div class="shared-hero-bg" style="background:${esc(stack.color)}"></div>
+          <div class="shared-hero-content">
+            <div class="shared-hero-icon">${esc(stack.icon)}</div>
+            <h1 class="shared-hero-title">${esc(stack.name)}</h1>
+            <p class="shared-hero-desc">${esc(stack.description)}</p>
+            <div class="shared-creator">
+              <div class="shared-creator-avatar" ${stack.creator_avatar ? `style="background-image:url(${stack.creator_avatar})"` : ''}>${stack.creator_avatar ? '' : esc(stack.creator_name.charAt(0).toUpperCase())}</div>
+              <div class="shared-creator-info">
+                <span class="shared-creator-label">Created by</span>
+                <span class="shared-creator-name">${esc(stack.creator_name)}</span>
+              </div>
+            </div>
+            <div class="shared-meta">
+              <span class="shared-meta-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                ${stack.tools.length} tool${stack.tools.length !== 1 ? 's' : ''}
+              </span>
+              <span class="shared-meta-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                ${stack.views} view${stack.views !== 1 ? 's' : ''}
+              </span>
+              <span class="shared-meta-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                ${stack.clones} clone${stack.clones !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div class="shared-actions">
+              ${isAuthenticated ? `
+              <button class="btn-clone" id="cloneBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Clone to My Stacks
+              </button>` : `
+              <a href="/auth?redirect=${encodeURIComponent(window.location.pathname)}" class="btn-clone" style="text-decoration:none">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Sign up to Clone
+              </a>`}
+              <button class="btn-copy-link" id="copyLinkBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                Copy Link
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="shared-tools">
+          <div class="shared-tools-header">Tools in this stack</div>
+          ${stack.tools.length > 0
+            ? `<div class="${isAuthenticated ? '' : 'shared-tools-gated'}">
+                <div class="shared-tools-grid">${toolsHtml}</div>
+                ${!isAuthenticated && stack.tools.length > 2 ? `
+                  <div class="gate-overlay">
+                    <div class="gate-card">
+                      <div class="gate-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                      </div>
+                      <div class="gate-title">Unlock all ${stack.tools.length} tools</div>
+                      <div class="gate-desc">Join AIDock for free to explore this full stack, clone it to your dashboard, and build your own AI collections.</div>
+                      <div class="gate-features">
+                        <span class="gate-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Free forever</span>
+                        <span class="gate-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Clone stacks</span>
+                        <span class="gate-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Build &amp; share</span>
+                      </div>
+                      <div class="gate-actions">
+                        <a href="/auth?redirect=${encodeURIComponent(window.location.pathname)}" class="btn-primary">Get Started — It's Free</a>
+                        <a href="/auth?redirect=${encodeURIComponent(window.location.pathname)}" class="btn-secondary">Already have an account? Sign In</a>
+                      </div>
+                    </div>
+                  </div>
+                ` : ''}
+               </div>`
+            : `<div class="shared-empty">This stack has no tools yet.</div>`}
+        </div>`;
+
+      document.getElementById('copyLinkBtn').addEventListener('click', () => {
+        navigator.clipboard.writeText(window.location.href).then(() => showToast('Link copied!'));
+      });
+
+      const cloneBtn = document.getElementById('cloneBtn');
+      if (cloneBtn) cloneBtn.addEventListener('click', async () => {
+        const btn = cloneBtn;
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Cloning…';
+        try {
+          const res = await fetch(`/api/stacks/clone/${slug}`, { method: 'POST' });
+          if (res.status === 401) {
+            showToast('Sign in to clone this stack');
+            setTimeout(() => window.location.href = authRedirect, 1200);
+            return;
+          }
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+          if (data.skipped > 0) {
+            showToast(`Stack cloned! ${data.skipped} tool${data.skipped > 1 ? 's' : ''} skipped (slot limit). Invite friends to unlock more!`);
+          } else {
+            showToast('Stack cloned! Check your dashboard.');
+          }
+          btn.innerHTML = '✓ Cloned';
+        } catch (err) {
+          showToast(err.message || 'Failed to clone');
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Clone to My Stacks';
+        }
+      });
+
+      // Update page title for SEO/sharing
+      document.title = `${stack.name} — AIDock Stack by ${stack.creator_name}`;
+    }
+
+    load();
+  </script>
+</body>
+</html>
