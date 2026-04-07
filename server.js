@@ -81,19 +81,31 @@ async function initDatabase() {
     // Production with Turso
     const { createClient } = require('@libsql/client');
     
-    db = createClient({
+    const tursoClient = createClient({
       url: process.env.TURSO_DATABASE_URL,
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
     
-    // Turso already returns { rows: [...] } format
-    db.saveToFile = () => {}; // No-op for Turso (auto-persisted)
+    // Wrap Turso client to match our db.execute(sql, params) interface
+    // @libsql/client expects { sql, args } object format
+    db = {
+      execute: async (sql, params = []) => {
+        try {
+          const result = await tursoClient.execute({ sql, args: params });
+          return { rows: result.rows };
+        } catch (err) {
+          console.error('Turso execute error:', err.message, '| SQL:', sql.substring(0, 100));
+          throw err;
+        }
+      },
+      saveToFile: () => {} // No-op for Turso (auto-persisted)
+    };
     
     console.log('☁️ Connected to Turso database');
   }
 }
 
-// Helper to get last insert ID (different between sql.js and Turso)
+// Helper to get last insert ID
 async function getLastInsertId() {
   const result = await db.execute("SELECT last_insert_rowid() as id");
   return result.rows[0].id || result.rows[0]['last_insert_rowid()'];
