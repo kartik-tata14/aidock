@@ -48,12 +48,19 @@
   document.getElementById('signupForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errEl = document.getElementById('signupError');
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
     errEl.textContent = '';
+    
     const name     = document.getElementById('signupName').value.trim();
     const email    = document.getElementById('signupEmail').value.trim();
     const password = document.getElementById('signupPassword').value;
     const primary_role = document.getElementById('signupPrimaryRole').value;
     const secondary_role = document.getElementById('signupSecondaryRole').value;
+
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = 'Creating account...';
 
     try {
       const res = await fetch('/api/auth/signup', {
@@ -62,10 +69,16 @@
         body: JSON.stringify({ name, email, password, primary_role, secondary_role, invite_code: refCode }),
       });
       const data = await res.json();
-      if (!res.ok) { errEl.textContent = data.error || 'Signup failed.'; return; }
+      if (!res.ok) { 
+        errEl.textContent = data.error || 'Signup failed.'; 
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return; 
+      }
 
       // Upload avatar if selected
       if (avatarDataUrl) {
+        btn.textContent = 'Uploading avatar...';
         await fetch('/api/auth/avatar', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -73,17 +86,29 @@
         });
       }
 
+      btn.textContent = 'Success! Redirecting...';
       window.location.href = redirectUrl;
-    } catch { errEl.textContent = 'Network error. Please try again.'; }
+    } catch { 
+      errEl.textContent = 'Network error. Please try again.'; 
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
   });
 
   // Login
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errEl = document.getElementById('loginError');
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
     errEl.textContent = '';
+    
     const email    = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
+
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -92,8 +117,18 @@
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
-      if (!res.ok) { errEl.textContent = data.error || 'Login failed.'; return; }
+      if (!res.ok) { 
+        errEl.textContent = data.error || 'Login failed.'; 
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return; 
+      }
+      btn.textContent = 'Success! Redirecting...';
       window.location.href = redirectUrl;
-    } catch { errEl.textContent = 'Network error. Please try again.'; }
+    } catch { 
+      errEl.textContent = 'Network error. Please try again.'; 
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
   });
 })();
