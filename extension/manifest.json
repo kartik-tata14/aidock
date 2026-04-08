@@ -2,15 +2,23 @@
   "manifest_version": 3,
   "name": "AIDock — Save AI Tools",
   "version": "1.0.0",
-  "description": "Quickly save any AI tool to your AIDock dashboard from any webpage.",
+  "description": "Save AI tools to your personal dashboard with one click. Organize, categorize, and discover AI tools from any webpage. Free Chrome extension for AIDock — your AI toolbox.",
   "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": [
+    "https://aidock-beta.vercel.app/*"
+  ],
   "action": {
     "default_popup": "popup.html",
-    "default_icon": "icons/icon128.svg"
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "icons": {
-    "16": "icons/icon128.svg",
-    "48": "icons/icon128.svg",
-    "128": "icons/icon128.svg"
-  }
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "homepage_url": "https://aidock-beta.vercel.app"
 }

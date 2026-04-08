@@ -4,7 +4,7 @@
   // --- Config ---
   // For local development: 'http://localhost:3000'
   // For production: Change to your Vercel URL, e.g., 'https://aidock.vercel.app'
-  const API_BASE = 'https://aidock-beta.vercel.app/';
+  const API_BASE = 'https://aidock-beta.vercel.app';
 
   // --- DOM refs ---
   const authView       = document.getElementById('authView');
