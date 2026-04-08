@@ -555,6 +555,139 @@ a:hover { text-decoration: underline; }
 .feature-card h3 { font-size: 17px; margin-bottom: 8px; }
 .feature-card p { font-size: 14px; color: rgba(255,255,255,0.55); line-height: 1.6; }
 
+/* Before/After Comparison Section */
+.comparison-section {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 100px 28px;
+}
+
+.comparison-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.comparison-eyebrow {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+}
+
+.comparison-title {
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+
+.comparison-gradient {
+  background: linear-gradient(135deg, #5cb8ff, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.comparison-card {
+  border-radius: 20px;
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+.comparison-before {
+  background: linear-gradient(145deg, rgba(239,68,68,0.12), rgba(239,68,68,0.05));
+  border: 1px solid rgba(239,68,68,0.2);
+}
+
+.comparison-after {
+  background: linear-gradient(145deg, rgba(34,197,94,0.12), rgba(34,197,94,0.05));
+  border: 1px solid rgba(34,197,94,0.2);
+}
+
+.comparison-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.comparison-icon {
+  font-size: 28px;
+}
+
+.comparison-card-header h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.comparison-before .comparison-card-header h3 {
+  color: #fca5a5;
+}
+
+.comparison-after .comparison-card-header h3 {
+  color: #86efac;
+}
+
+.comparison-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.comparison-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.75);
+}
+
+.comparison-x,
+.comparison-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.comparison-x {
+  background: rgba(239,68,68,0.2);
+  color: #f87171;
+}
+
+.comparison-check {
+  background: rgba(34,197,94,0.2);
+  color: #4ade80;
+}
+
+@media (max-width: 768px) {
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+  .comparison-card {
+    padding: 24px;
+  }
+}
+
 /* Apple-style Walkthrough Section */
 .walkthrough-section {
   max-width: 1200px;
