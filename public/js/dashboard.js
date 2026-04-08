@@ -233,6 +233,7 @@
       return;
     }
     updateAvatar();
+    updateProUI(); // Update sidebar for Pro users
     await loadTools();
     try { await loadStacks(); } catch (e) { console.warn('Stacks load failed:', e); }
     render();
@@ -358,8 +359,65 @@
 
   /* ===== Render ===== */
   function getUserToolLimit() { return (currentUser && currentUser.tool_limit) || 10; }
+  function isProUser() { return currentUser && currentUser.is_pro === true; }
+
+  /* ===== Pro User UI Updates ===== */
+  function updateProUI() {
+    if (!currentUser) return;
+    
+    const isPro = isProUser();
+    const tierBadgeRow = document.querySelector('.tier-badge-row');
+    const tierCounter = document.querySelector('.tier-counter');
+    const tierProgressTrack = document.querySelector('.tier-progress-track');
+    const referralWidget = document.querySelector('.referral-widget');
+    
+    if (isPro) {
+      // Replace Free Tier badge and Get Pro button with Pro Member badge
+      if (tierBadgeRow) {
+        tierBadgeRow.innerHTML = `
+          <div class="tier-badge tier-badge-pro">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Pro Member
+          </div>
+        `;
+      }
+      
+      // Hide tool slot counter and progress bar
+      if (tierCounter) tierCounter.style.display = 'none';
+      if (tierProgressTrack) tierProgressTrack.style.display = 'none';
+      
+      // Simplify referral widget - just show Invite Friends button
+      if (referralWidget) {
+        const inviteCode = currentUser.invite_code || '';
+        const inviteLink = `${location.origin}/join/${inviteCode}`;
+        referralWidget.innerHTML = `
+          <div class="referral-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+            Invite Friends
+          </div>
+          <p class="referral-desc">Share AIDock with friends and help them discover the best AI tools.</p>
+          <div class="referral-link-wrap">
+            <input type="text" class="referral-link-input" id="referralLinkInput" value="${inviteLink}" readonly>
+            <button class="referral-copy-btn" id="referralCopyBtn" title="Copy invite link">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
+        `;
+        // Re-attach copy button listener
+        const newCopyBtn = referralWidget.querySelector('#referralCopyBtn');
+        if (newCopyBtn) {
+          newCopyBtn.addEventListener('click', () => {
+            const input = referralWidget.querySelector('#referralLinkInput');
+            if (input && input.value) copyInviteLink(input.value, newCopyBtn);
+          });
+        }
+      }
+    }
+  }
 
   function updateTierCounter() {
+    // Skip for Pro users
+    if (isProUser()) return;
     const count = tools.length;
     const limit = getUserToolLimit();
     const el = $('#toolCount');
@@ -393,6 +451,20 @@
 
   function updateReferralWidget() {
     if (!currentUser) return;
+    // Skip for Pro users - handled in updateProUI()
+    if (isProUser()) {
+      // Just update stacks widget for Pro users (simplified)
+      const stacksWidget = $('#stacksInviteWidget');
+      if (stacksWidget && currentUser.invite_code) {
+        stacksWidget.innerHTML = `
+          <button class="stacks-invite-copy" id="stacksInviteCopyBtn" data-link="${location.origin}/join/${currentUser.invite_code}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+            Invite Friends
+          </button>`;
+      }
+      return;
+    }
+    
     const refCount = currentUser.referral_count || 0;
     const maxRefs = 5;
     const progressWrap = $('#referralProgress');

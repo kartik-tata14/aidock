@@ -2176,6 +2176,14 @@ a:hover { text-decoration: underline; }
   padding: 4px 10px; border-radius: 8px;
 }
 .tier-badge svg { flex-shrink: 0; }
+.tier-badge-pro {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #fff;
+  padding: 6px 14px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+}
+.tier-badge-pro svg { fill: #fff; }
 .get-pro-btn {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
