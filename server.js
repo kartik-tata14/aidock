@@ -327,8 +327,9 @@ app.put('/api/auth/avatar', authMiddleware, async (req, res) => {
 // Note: Razorpay accepts amounts in smallest currency unit (paise for INR, cents for USD)
 // For INR: ₹499 = 49900 paise, ₹3999 = 399900 paise
 // For USD: $4.99 = 499 cents, $39.99 = 3999 cents
+// TESTING: Monthly set to ₹1 (100 paise) - REVERT to 49900 after testing!
 const PRICING = {
-  monthly: { amount: 49900, currency: 'INR', description: 'AIDock Pro - Monthly' },
+  monthly: { amount: 100, currency: 'INR', description: 'AIDock Pro - Monthly (TEST)' },
   yearly: { amount: 399900, currency: 'INR', description: 'AIDock Pro - Yearly' }
 };
 
