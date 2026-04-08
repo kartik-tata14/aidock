@@ -701,22 +701,11 @@ a:hover { text-decoration: underline; }
   border-radius: 15px;
 }
 
-.step-device-extension {
-  max-width: 400px;
-  margin-left: auto;
-}
-
-.step-device-dashboard {
-  max-width: 100%;
-}
-
-.step-device-stack {
-  max-width: 520px;
-  margin-left: auto;
-}
-
+.step-device-extension,
+.step-device-dashboard,
+.step-device-stack,
 .step-device-profile {
-  max-width: 480px;
+  max-width: 100%;
 }
 
 /* Responsive walkthrough */
