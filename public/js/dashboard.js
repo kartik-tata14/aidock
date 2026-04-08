@@ -416,7 +416,10 @@
   }
 
   function updateTierCounter() {
-    // Skip for Pro users
+    // Always update referral widget (handles hiding for Pro)
+    updateReferralWidget();
+    
+    // Skip tier counter for Pro users
     if (isProUser()) return;
     const count = tools.length;
     const limit = getUserToolLimit();
@@ -430,7 +433,6 @@
       bar.style.width = pct + '%';
       bar.classList.toggle('tier-full', count >= limit);
     }
-    updateReferralWidget();
   }
 
   function referralProgressHTML(refCount, maxRefs, size) {
@@ -451,17 +453,10 @@
 
   function updateReferralWidget() {
     if (!currentUser) return;
-    // Skip for Pro users - handled in updateProUI()
+    // Hide stacks widget for Pro users
+    const stacksWidget = $('#stacksInviteWidget');
     if (isProUser()) {
-      // Just update stacks widget for Pro users (simplified)
-      const stacksWidget = $('#stacksInviteWidget');
-      if (stacksWidget && currentUser.invite_code) {
-        stacksWidget.innerHTML = `
-          <button class="stacks-invite-copy" id="stacksInviteCopyBtn" data-link="${location.origin}/join/${currentUser.invite_code}">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-            Invite Friends
-          </button>`;
-      }
+      if (stacksWidget) stacksWidget.style.display = 'none';
       return;
     }
     
@@ -476,7 +471,6 @@
       linkInput.value = `${location.origin}/join/${currentUser.invite_code}`;
     }
     // Update stacks inline widget
-    const stacksWidget = $('#stacksInviteWidget');
     if (stacksWidget && currentUser.invite_code) {
       stacksWidget.innerHTML = `
         <div class="stacks-invite-progress">${referralProgressHTML(refCount, maxRefs, 'sm')}</div>
@@ -983,7 +977,9 @@
 
   function renderStacks() {
     stacksSection.style.display = 'block';
-    stacksDock.innerHTML = stacks.map(s => {
+    
+    // Build stack items HTML
+    const stacksHtml = stacks.map(s => {
       const stackTools = s.tool_ids.map(id => tools.find(t => t.id === id)).filter(Boolean);
       const previews = stackTools.slice(0, 4);
       let faviconsHtml = '';
@@ -1012,6 +1008,20 @@
           ${faviconsHtml ? `<div class="stack-favicons">${faviconsHtml}</div>` : ''}
         </div>`;
     }).join('');
+    
+    // Add "Create Stack" placeholder tile at the end
+    const createStackTile = `
+      <div class="stack-item stack-item-create" id="createStackTile">
+        <div class="stack-icon-wrap stack-icon-create">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="stack-info">
+          <div class="stack-label">Create Stack</div>
+          <div class="stack-meta">Organize your tools</div>
+        </div>
+      </div>`;
+    
+    stacksDock.innerHTML = stacksHtml + createStackTile;
   }
 
   function openStackModal(stack) {
@@ -1089,10 +1099,17 @@
   $('#stackModalClose').addEventListener('click', closeStackModal);
   stackModalOverlay.addEventListener('click', (e) => { if (e.target === stackModalOverlay) closeStackModal(); });
 
-  // Click stack to open folder
+  // Click stack to open folder or create new stack
   stacksDock.addEventListener('click', (e) => {
     const item = e.target.closest('.stack-item');
     if (!item) return;
+    
+    // Handle create stack tile click
+    if (item.classList.contains('stack-item-create')) {
+      openStackModal(null);
+      return;
+    }
+    
     const s = stacks.find(x => x.id === Number(item.dataset.stackId));
     if (s) openFolder(s);
   });

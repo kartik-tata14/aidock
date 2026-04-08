@@ -1740,6 +1740,34 @@ a:hover { text-decoration: underline; }
   color: var(--text-secondary); font-size: 13px; opacity: .5;
   text-align: center; padding: 28px 16px;
   border: 2px dashed var(--border); border-radius: 16px;
+  display: none; /* Hidden - using create stack tile instead */
+}
+
+/* Create Stack Tile */
+.stack-item-create {
+  border: 2px dashed var(--border);
+  background: transparent;
+  box-shadow: none;
+}
+.stack-item-create:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: none;
+  transform: translateY(-2px);
+}
+.stack-icon-create {
+  background: var(--border);
+  color: var(--text-secondary);
+}
+.stack-item-create:hover .stack-icon-create {
+  background: var(--accent);
+  color: #fff;
+}
+.stack-item-create .stack-label {
+  color: var(--text-secondary);
+}
+.stack-item-create:hover .stack-label {
+  color: var(--accent);
 }
 
 .stack-item {
