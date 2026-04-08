@@ -564,7 +564,10 @@
       const data = await api('/api/tools/import', { method: 'POST', body: JSON.stringify({ tools: toImport }) });
       await loadTools();
       render();
-      alert(`Imported ${data.imported} tool(s).`);
+      let msg = `Imported ${data.imported} tool(s).`;
+      if (data.skipped > 0) msg += ` ${data.skipped} duplicate(s) skipped.`;
+      if (data.skippedLimit > 0) msg += ` ${data.skippedLimit} skipped (slot limit reached).`;
+      alert(msg);
     } catch (err) { alert(err.message); }
     e.target.value = '';
   });

@@ -385,23 +385,40 @@ app.post('/api/tools/import', authMiddleware, async (req, res) => {
     const { tools: toolsList } = req.body;
     if (!Array.isArray(toolsList)) return res.status(400).json({ error: 'Expected an array of tools.' });
 
+    // Check user's current count and limit
+    const limitResult = await db.execute("SELECT tool_limit FROM users WHERE id = ?", [req.user.id]);
+    const userToolLimit = limitResult.rows[0]?.tool_limit || BASE_TOOL_LIMIT;
+    const countResult = await db.execute("SELECT COUNT(*) as cnt FROM tools WHERE user_id = ?", [req.user.id]);
+    let currentToolCount = countResult.rows[0].cnt;
+
     let count = 0;
-    let skipped = 0;
+    let skippedDuplicate = 0;
+    let skippedLimit = 0;
+
     for (const t of toolsList) {
       if (!t.name) continue;
+
+      // Check limit before adding
+      if (currentToolCount >= userToolLimit) {
+        skippedLimit++;
+        continue;
+      }
+
       const nameNorm = t.name.trim().toLowerCase();
       const urlNorm = (t.url || '').trim().toLowerCase();
       const existing = await db.execute(
         "SELECT id FROM tools WHERE user_id = ? AND (LOWER(name) = ? OR (url != '' AND LOWER(url) = ?))",
         [req.user.id, nameNorm, urlNorm]
       );
-      if (existing.rows.length > 0) { skipped++; continue; }
+      if (existing.rows.length > 0) { skippedDuplicate++; continue; }
+
       await db.execute("INSERT INTO tools (user_id, name, url, category, pricing, description, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [req.user.id, t.name.trim(), t.url || '', t.category || 'Other', t.pricing || 'Unknown', t.description || '', t.notes || '']);
       count++;
+      currentToolCount++;
     }
     db.saveToFile();
-    res.json({ imported: count, skipped });
+    res.json({ imported: count, skipped: skippedDuplicate, skippedLimit });
   } catch (err) {
     console.error('Import tools error:', err);
     res.status(500).json({ error: 'Failed to import tools.' });
