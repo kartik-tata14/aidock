@@ -555,21 +555,198 @@ a:hover { text-decoration: underline; }
 .feature-card h3 { font-size: 17px; margin-bottom: 8px; }
 .feature-card p { font-size: 14px; color: rgba(255,255,255,0.55); line-height: 1.6; }
 
-/* How it works */
-.how-section { max-width: 900px; margin: 0 auto; padding: 80px 28px; text-align: center; }
-.steps { display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap; margin-top: 40px; }
-.step {
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 16px; padding: 32px 24px; flex: 1; min-width: 200px;
+/* Apple-style Walkthrough Section */
+.walkthrough-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 120px 28px;
 }
-.step-num {
-  width: 40px; height: 40px; border-radius: 50%; background: var(--accent);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; margin: 0 auto 14px;
+
+.walkthrough-header {
+  text-align: center;
+  margin-bottom: 80px;
 }
-.step h3 { font-size: 15px; margin-bottom: 6px; }
-.step p { font-size: 13px; color: rgba(255,255,255,0.5); }
-.step-arrow { font-size: 24px; color: rgba(255,255,255,0.2); }
+
+.walkthrough-eyebrow {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+}
+
+.walkthrough-title {
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -1px;
+  margin-bottom: 20px;
+}
+
+.walkthrough-gradient {
+  background: linear-gradient(135deg, #5cb8ff, #a78bfa, #f472b6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.walkthrough-subtitle {
+  font-size: 18px;
+  color: rgba(255,255,255,0.55);
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.walkthrough-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 100px;
+}
+
+.walkthrough-step {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 60px;
+  align-items: center;
+}
+
+.walkthrough-step-reverse {
+  direction: rtl;
+}
+
+.walkthrough-step-reverse > * {
+  direction: ltr;
+}
+
+.step-content {
+  padding: 20px 0;
+}
+
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--accent), #5e5ce6);
+  border-radius: 14px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0,113,227,0.25);
+}
+
+.step-title {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  letter-spacing: -0.5px;
+}
+
+.step-description {
+  font-size: 17px;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 24px;
+}
+
+.step-highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+}
+
+.highlight-icon {
+  font-size: 16px;
+}
+
+.step-visual {
+  position: relative;
+}
+
+.step-device {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 
+    0 40px 80px rgba(0,0,0,0.4),
+    0 20px 40px rgba(0,0,0,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+
+.step-device:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 50px 100px rgba(10,132,255,0.15),
+    0 25px 50px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+.step-screenshot {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 15px;
+}
+
+.step-device-extension {
+  max-width: 400px;
+  margin-left: auto;
+}
+
+.step-device-dashboard {
+  max-width: 100%;
+}
+
+.step-device-stack {
+  max-width: 520px;
+  margin-left: auto;
+}
+
+.step-device-profile {
+  max-width: 480px;
+}
+
+/* Responsive walkthrough */
+@media (max-width: 900px) {
+  .walkthrough-step,
+  .walkthrough-step-reverse {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    direction: ltr;
+  }
+  
+  .walkthrough-step-reverse > * {
+    direction: ltr;
+  }
+  
+  .step-device-extension,
+  .step-device-stack,
+  .step-device-profile {
+    max-width: 100%;
+    margin: 0 auto;
+  }
+  
+  .walkthrough-steps {
+    gap: 70px;
+  }
+  
+  .step-title {
+    font-size: 26px;
+  }
+}
 
 /* CTA */
 .cta-section { padding: 60px 28px 100px; }
