@@ -1185,6 +1185,24 @@ a:hover { text-decoration: underline; }
   font-size: 38px; font-weight: 800; color: #fff; margin-bottom: 4px;
 }
 .pricing-card-price span { font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.5); }
+.pricing-card-price .price-original {
+  font-size: 22px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.4);
+  text-decoration: line-through;
+  margin-right: 8px;
+}
+.pricing-early-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+  letter-spacing: 0.3px;
+}
 .pricing-card-desc { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 20px; }
 .pricing-features {
   list-style: none; padding: 0; margin: 0 0 24px; text-align: left; flex: 1;
@@ -2386,8 +2404,11 @@ a:hover { text-decoration: underline; }
   padding: 2px 10px; border-radius: 99px; letter-spacing: .3px;
 }
 .pro-plan-name { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
-.pro-plan-price { font-size: 28px; font-weight: 800; color: var(--text); margin-bottom: 12px; }
-.pro-plan-price span { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.pro-plan-price { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 12px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pro-plan-price .price-original { font-size: 13px; font-weight: 500; color: var(--text-secondary); text-decoration: line-through; }
+.pro-plan-price .price-current { display: inline; }
+.pro-plan-price .price-current span { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.pro-plan .pricing-early-badge { margin-bottom: 8px; font-size: 10px; padding: 3px 10px; }
 .pro-plan-btn {
   width: 100%; padding: 8px; border-radius: 10px; font-size: 13px; font-weight: 600;
   border: 1px solid var(--border); background: var(--bg); color: var(--text);
