@@ -175,7 +175,7 @@ function authMiddleware(req, res, next) {
 // ===== Auth routes =====
 const MAX_REFERRALS = 5;
 const SLOTS_PER_REFERRAL = 2;
-const BASE_TOOL_LIMIT = 10;
+const BASE_TOOL_LIMIT = 20;
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
@@ -267,7 +267,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     if (isPro && row.subscription_expiry) {
       const expiry = new Date(row.subscription_expiry);
       if (expiry < new Date()) {
-        await db.execute("UPDATE users SET is_pro = 0, tool_limit = 10 WHERE id = ?", [req.user.id]);
+        await db.execute("UPDATE users SET is_pro = 0, tool_limit = ? WHERE id = ?", [BASE_TOOL_LIMIT, req.user.id]);
         db.saveToFile();
         isPro = false;
       }
@@ -451,7 +451,7 @@ app.get('/api/payment/status', authMiddleware, async (req, res) => {
       const expiry = new Date(user.subscription_expiry);
       if (expiry < new Date()) {
         // Subscription expired, downgrade user
-        await db.execute("UPDATE users SET is_pro = 0, tool_limit = 10 WHERE id = ?", [req.user.id]);
+        await db.execute("UPDATE users SET is_pro = 0, tool_limit = ? WHERE id = ?", [BASE_TOOL_LIMIT, req.user.id]);
         db.saveToFile();
         isPro = false;
       }
@@ -1173,7 +1173,7 @@ async function initSchema() {
     secondary_role TEXT DEFAULT '',
     invite_code TEXT,
     referred_by INTEGER,
-    tool_limit INTEGER DEFAULT 10,
+    tool_limit INTEGER DEFAULT 20,
     avatar TEXT DEFAULT '',
     created_at DATETIME DEFAULT (datetime('now'))
   )`);
@@ -1184,7 +1184,7 @@ async function initSchema() {
     "ALTER TABLE users ADD COLUMN secondary_role TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN invite_code TEXT",
     "ALTER TABLE users ADD COLUMN referred_by INTEGER",
-    "ALTER TABLE users ADD COLUMN tool_limit INTEGER DEFAULT 10",
+    "ALTER TABLE users ADD COLUMN tool_limit INTEGER DEFAULT 20",
     "ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN is_pro INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN subscription_type TEXT DEFAULT ''",
@@ -1198,6 +1198,19 @@ async function initSchema() {
   }
   
   try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_invite_code ON users(invite_code)"); } catch {}
+  
+  // Migration: Update existing users from old 10-base limit to new 20-base limit
+  // Check if any users have old-system values (10, 12, 14, 16, 18 - values only possible with old base=10)
+  try {
+    const oldUsers = await db.execute("SELECT COUNT(*) as cnt FROM users WHERE tool_limit IN (10, 12, 14, 16, 18) AND (is_pro = 0 OR is_pro IS NULL)");
+    if (oldUsers.rows[0]?.cnt > 0 || oldUsers.rows[0]?.['COUNT(*)'] > 0) {
+      // Migrate: add +10 to all free users with old-system limits (10-20)
+      await db.execute("UPDATE users SET tool_limit = tool_limit + 10 WHERE tool_limit <= 20 AND (is_pro = 0 OR is_pro IS NULL)");
+      console.log('✅ Migrated existing users to new 20-slot base limit');
+    }
+  } catch (e) {
+    // Ignore if error
+  }
   
   // Referrals table
   await db.execute(`CREATE TABLE IF NOT EXISTS referrals (

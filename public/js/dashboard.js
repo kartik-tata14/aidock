@@ -288,9 +288,13 @@
     // Update stat cards
     const cats = new Set(tools.map(t => t.category));
     const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    // Calculate tools added this week
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const thisWeekCount = tools.filter(t => new Date(t.created_at) >= oneWeekAgo).length;
     setTxt('statTotal', tools.length);
+    setTxt('statThisWeek', thisWeekCount);
     setTxt('statCategories', cats.size);
-    setTxt('statFree', tools.filter(t => t.pricing === 'Free' || t.pricing === 'Freemium').length);
     setTxt('statPaid', tools.filter(t => t.pricing === 'Paid').length);
   }
 
@@ -358,7 +362,7 @@
   }
 
   /* ===== Render ===== */
-  function getUserToolLimit() { return (currentUser && currentUser.tool_limit) || 10; }
+  function getUserToolLimit() { return (currentUser && currentUser.tool_limit) || 20; }
   function isProUser() { return currentUser && currentUser.is_pro === true; }
 
   /* ===== Pro User UI Updates ===== */
@@ -1017,7 +1021,7 @@
         </div>
         <div class="stack-info">
           <div class="stack-label">Create Stack</div>
-          <div class="stack-meta">Organize your tools</div>
+          <div class="stack-meta">Drag & Drop your Tools into the stack</div>
         </div>
       </div>`;
     

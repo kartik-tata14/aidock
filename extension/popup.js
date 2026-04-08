@@ -66,11 +66,29 @@
     userNameEl.textContent = user.name;
     userAvatarEl.textContent = user.name.charAt(0).toUpperCase();
     
-    // Update slots indicator
-    updateSlotsIndicator();
+    // Hide slots indicator for Pro users
+    if (isProUser(user)) {
+      slotsIndicator.style.display = 'none';
+    } else {
+      slotsIndicator.style.display = '';
+      updateSlotsIndicator();
+    }
     
     // Fetch and show recent tools
     fetchRecentTools();
+  }
+
+  // --- Check if user is Pro ---
+  function isProUser(user) {
+    if (!user) return false;
+    if (user.is_pro === 1 || user.is_pro === true) {
+      // Check if subscription is still valid
+      if (user.subscription_expiry) {
+        return new Date(user.subscription_expiry) > new Date();
+      }
+      return true;
+    }
+    return false;
   }
 
   // --- Update slots indicator ---
@@ -78,7 +96,7 @@
     if (!currentUser) return;
     
     const used = userTools.length;
-    const limit = currentUser.tool_limit || 10;
+    const limit = currentUser.tool_limit || 20;
     const percent = Math.min((used / limit) * 100, 100);
     
     slotsFill.style.width = percent + '%';
@@ -99,8 +117,10 @@
       const data = await api('/api/tools');
       userTools = data.tools || [];
       
-      // Update slots after fetching tools
-      updateSlotsIndicator();
+      // Update slots after fetching tools (only for non-Pro users)
+      if (!isProUser(currentUser)) {
+        updateSlotsIndicator();
+      }
       
       // Show recently added (last 3)
       const recent = userTools
