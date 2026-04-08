@@ -118,6 +118,97 @@
     return data;
   }
 
+  /* ===== Razorpay Payment Integration ===== */
+  async function initiatePayment(plan) {
+    try {
+      // Create order on backend
+      const orderData = await api('/api/payment/create-order', {
+        method: 'POST',
+        body: JSON.stringify({ plan })
+      });
+
+      // Configure Razorpay options
+      const options = {
+        key: orderData.key,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'AIDock',
+        description: orderData.description,
+        order_id: orderData.orderId,
+        handler: async function (response) {
+          // Verify payment on backend
+          try {
+            const result = await api('/api/payment/verify', {
+              method: 'POST',
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                plan: plan
+              })
+            });
+            
+            if (result.success) {
+              // Show success message and reload
+              showPaymentSuccess(plan);
+            }
+          } catch (err) {
+            alert('Payment verification failed: ' + err.message);
+          }
+        },
+        prefill: {
+          name: currentUser?.name || '',
+          email: currentUser?.email || ''
+        },
+        theme: {
+          color: '#f97316'
+        },
+        modal: {
+          ondismiss: function() {
+            console.log('Payment cancelled');
+          }
+        }
+      };
+
+      // Open Razorpay checkout
+      const rzp = new Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        alert('Payment failed: ' + response.error.description);
+      });
+      rzp.open();
+    } catch (err) {
+      alert('Failed to initiate payment: ' + err.message);
+    }
+  }
+
+  function showPaymentSuccess(plan) {
+    // Close any open overlays
+    const limitOverlay = $('#limitOverlay');
+    const proOverlay = $('#proOverlay');
+    if (limitOverlay) limitOverlay.classList.remove('open');
+    if (proOverlay) proOverlay.classList.remove('open');
+    
+    // Create success overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `
+      <div class="modal" style="text-align:center;max-width:400px">
+        <div style="font-size:64px;margin-bottom:16px">🎉</div>
+        <h2 style="margin-bottom:8px">Welcome to AIDock Pro!</h2>
+        <p style="color:var(--text-secondary);margin-bottom:24px">
+          Your ${plan} subscription is now active.<br>
+          Enjoy unlimited tools, stacks, and more!
+        </p>
+        <button class="btn-primary" id="successReloadBtn" style="width:100%">Start Using Pro</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    overlay.querySelector('#successReloadBtn').addEventListener('click', () => {
+      window.location.reload();
+    });
+  }
+
   /* ===== Theme ===== */
   function initTheme() {
     const saved = localStorage.getItem('aidock-theme');
@@ -155,6 +246,15 @@
       history.replaceState({}, '', window.location.pathname);
       // Show limit paywall after a brief delay (uses existing dashboard paywall)
       setTimeout(() => openLimitPaywall(), 300);
+    }
+    
+    // Check for payment parameter (from landing page pricing)
+    const paymentPlan = urlParams.get('payment');
+    if (paymentPlan === 'monthly' || paymentPlan === 'yearly') {
+      // Clean up URL
+      history.replaceState({}, '', window.location.pathname);
+      // Initiate payment after a brief delay
+      setTimeout(() => initiatePayment(paymentPlan), 500);
     }
   }
 
@@ -675,7 +775,10 @@
   $('#proClose').addEventListener('click', () => proOverlay.classList.remove('open'));
   proOverlay.addEventListener('click', (e) => { if (e.target === proOverlay) proOverlay.classList.remove('open'); });
   proOverlay.querySelectorAll('.pro-plan-btn').forEach(btn => {
-    btn.addEventListener('click', () => alert('Pro subscriptions coming soon! 🚀'));
+    btn.addEventListener('click', () => {
+      const isYearly = btn.closest('.pro-plan-yearly');
+      initiatePayment(isYearly ? 'yearly' : 'monthly');
+    });
   });
 
   // Limit Paywall
@@ -683,7 +786,10 @@
   $('#limitClose').addEventListener('click', () => limitOverlay.classList.remove('open'));
   limitOverlay.addEventListener('click', (e) => { if (e.target === limitOverlay) limitOverlay.classList.remove('open'); });
   limitOverlay.querySelectorAll('.limit-pro-btn').forEach(btn => {
-    btn.addEventListener('click', () => alert('Pro subscriptions coming soon! 🚀'));
+    btn.addEventListener('click', () => {
+      const isYearly = btn.closest('.pro-plan-yearly');
+      initiatePayment(isYearly ? 'yearly' : 'monthly');
+    });
   });
   $('#limitCopyBtn').addEventListener('click', () => {
     copyInviteLink($('#limitInviteLink').value, $('#limitCopyBtn'));

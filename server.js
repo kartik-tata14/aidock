@@ -4,10 +4,24 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const path = require('path');
+const Razorpay = require('razorpay');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+
+// Razorpay configuration
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+
+let razorpay = null;
+if (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) {
+  razorpay = new Razorpay({
+    key_id: RAZORPAY_KEY_ID,
+    key_secret: RAZORPAY_KEY_SECRET
+  });
+  console.log('💳 Razorpay initialized');
+}
 
 // Database mode: Turso (production) or SQLite file (local dev)
 const USE_LOCAL_DB = process.env.USE_LOCAL_DB === 'true' || !process.env.TURSO_DATABASE_URL;
@@ -243,10 +257,22 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    const result = await db.execute("SELECT primary_role, secondary_role, invite_code, tool_limit, avatar FROM users WHERE id = ?", [req.user.id]);
+    const result = await db.execute("SELECT primary_role, secondary_role, invite_code, tool_limit, avatar, is_pro, subscription_type, subscription_expiry FROM users WHERE id = ?", [req.user.id]);
     const row = result.rows[0] || {};
     const refResult = await db.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", [req.user.id]);
     const referral_count = refResult.rows[0].cnt || 0;
+    
+    // Check if subscription has expired
+    let isPro = row.is_pro === 1;
+    if (isPro && row.subscription_expiry) {
+      const expiry = new Date(row.subscription_expiry);
+      if (expiry < new Date()) {
+        await db.execute("UPDATE users SET is_pro = 0, tool_limit = 10 WHERE id = ?", [req.user.id]);
+        db.saveToFile();
+        isPro = false;
+      }
+    }
+    
     res.json({
       user: {
         id: req.user.id,
@@ -255,9 +281,12 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         primary_role: row.primary_role || '',
         secondary_role: row.secondary_role || '',
         invite_code: row.invite_code || '',
-        tool_limit: row.tool_limit || BASE_TOOL_LIMIT,
+        tool_limit: isPro ? 999999 : (row.tool_limit || BASE_TOOL_LIMIT),
         referral_count,
-        avatar: row.avatar || ''
+        avatar: row.avatar || '',
+        is_pro: isPro,
+        subscription_type: row.subscription_type || null,
+        subscription_expiry: row.subscription_expiry || null
       }
     });
   } catch (err) {
@@ -291,6 +320,151 @@ app.put('/api/auth/avatar', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Avatar update error:', err);
     res.status(500).json({ error: 'Failed to update avatar.' });
+  }
+});
+
+// ===== Payment Routes (Razorpay) =====
+// Note: Razorpay accepts amounts in smallest currency unit (paise for INR, cents for USD)
+// For INR: ₹499 = 49900 paise, ₹3999 = 399900 paise
+// For USD: $4.99 = 499 cents, $39.99 = 3999 cents
+const PRICING = {
+  monthly: { amount: 49900, currency: 'INR', description: 'AIDock Pro - Monthly' },
+  yearly: { amount: 399900, currency: 'INR', description: 'AIDock Pro - Yearly' }
+};
+
+// Create Razorpay order
+app.post('/api/payment/create-order', authMiddleware, async (req, res) => {
+  try {
+    if (!razorpay) {
+      return res.status(500).json({ error: 'Payment gateway not configured.' });
+    }
+    
+    const { plan } = req.body;
+    if (!plan || !PRICING[plan]) {
+      return res.status(400).json({ error: 'Invalid plan. Choose monthly or yearly.' });
+    }
+    
+    const pricing = PRICING[plan];
+    const order = await razorpay.orders.create({
+      amount: pricing.amount, // Already in smallest currency unit (paise/cents)
+      currency: pricing.currency,
+      receipt: `receipt_${req.user.id}_${Date.now()}`,
+      notes: {
+        user_id: req.user.id.toString(),
+        plan: plan,
+        user_email: req.user.email
+      }
+    });
+    
+    res.json({
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key: RAZORPAY_KEY_ID,
+      plan: plan,
+      description: pricing.description
+    });
+  } catch (err) {
+    console.error('Create order error:', err);
+    res.status(500).json({ error: 'Failed to create payment order.' });
+  }
+});
+
+// Verify payment and activate Pro
+app.post('/api/payment/verify', authMiddleware, async (req, res) => {
+  try {
+    if (!razorpay) {
+      return res.status(500).json({ error: 'Payment gateway not configured.' });
+    }
+    
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan } = req.body;
+    
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ error: 'Missing payment verification data.' });
+    }
+    
+    // Verify signature
+    const body = razorpay_order_id + '|' + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac('sha256', RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest('hex');
+    
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ error: 'Invalid payment signature.' });
+    }
+    
+    // Calculate subscription expiry
+    const now = new Date();
+    let expiry = new Date();
+    if (plan === 'yearly') {
+      expiry.setFullYear(expiry.getFullYear() + 1);
+    } else {
+      expiry.setMonth(expiry.getMonth() + 1);
+    }
+    
+    // Update user to Pro
+    await db.execute(`UPDATE users SET 
+      is_pro = 1, 
+      subscription_type = ?, 
+      subscription_start = ?, 
+      subscription_expiry = ?,
+      razorpay_payment_id = ?,
+      razorpay_order_id = ?,
+      tool_limit = 999999
+      WHERE id = ?`,
+      [plan, now.toISOString(), expiry.toISOString(), razorpay_payment_id, razorpay_order_id, req.user.id]
+    );
+    db.saveToFile();
+    
+    res.json({ 
+      success: true, 
+      message: 'Payment verified! Welcome to AIDock Pro.',
+      subscription: {
+        type: plan,
+        expiry: expiry.toISOString()
+      }
+    });
+  } catch (err) {
+    console.error('Payment verification error:', err);
+    res.status(500).json({ error: 'Payment verification failed.' });
+  }
+});
+
+// Get subscription status
+app.get('/api/payment/status', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.execute(
+      "SELECT is_pro, subscription_type, subscription_start, subscription_expiry FROM users WHERE id = ?",
+      [req.user.id]
+    );
+    const user = result.rows[0];
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    
+    // Check if subscription has expired
+    let isPro = user.is_pro === 1;
+    if (isPro && user.subscription_expiry) {
+      const expiry = new Date(user.subscription_expiry);
+      if (expiry < new Date()) {
+        // Subscription expired, downgrade user
+        await db.execute("UPDATE users SET is_pro = 0, tool_limit = 10 WHERE id = ?", [req.user.id]);
+        db.saveToFile();
+        isPro = false;
+      }
+    }
+    
+    res.json({
+      is_pro: isPro,
+      subscription_type: user.subscription_type || null,
+      subscription_start: user.subscription_start || null,
+      subscription_expiry: user.subscription_expiry || null
+    });
+  } catch (err) {
+    console.error('Subscription status error:', err);
+    res.status(500).json({ error: 'Failed to fetch subscription status.' });
   }
 });
 
@@ -1010,7 +1184,13 @@ async function initSchema() {
     "ALTER TABLE users ADD COLUMN invite_code TEXT",
     "ALTER TABLE users ADD COLUMN referred_by INTEGER",
     "ALTER TABLE users ADD COLUMN tool_limit INTEGER DEFAULT 10",
-    "ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT ''"
+    "ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN is_pro INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN subscription_type TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN subscription_start DATETIME",
+    "ALTER TABLE users ADD COLUMN subscription_expiry DATETIME",
+    "ALTER TABLE users ADD COLUMN razorpay_payment_id TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN razorpay_order_id TEXT DEFAULT ''"
   ];
   for (const sql of migrations) {
     try { await db.execute(sql); } catch {}

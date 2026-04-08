@@ -4,7 +4,13 @@
   // Capture URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const refCode = urlParams.get('ref') || '';
-  const redirectUrl = urlParams.get('redirect') || '/dashboard';
+  const plan = urlParams.get('plan') || '';
+  
+  // Determine redirect URL based on plan parameter
+  let redirectUrl = urlParams.get('redirect') || '/dashboard';
+  if (plan === 'monthly' || plan === 'yearly') {
+    redirectUrl = `/dashboard?payment=${plan}`;
+  }
 
   // Check if already logged in
   fetch('/api/auth/me').then(r => { if (r.ok) window.location.href = redirectUrl; });
