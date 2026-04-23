@@ -1537,6 +1537,88 @@ a:hover { text-decoration: underline; }
 .dot-paid { background: var(--paid); }
 .dot-unknown { background: var(--unknown); }
 
+/* Renewal Banner */
+.renewal-banner {
+  border-radius: 12px; margin-bottom: 16px; overflow: hidden;
+  border: 1px solid rgba(255, 160, 0, 0.3);
+  background: linear-gradient(135deg, rgba(255, 160, 0, 0.08) 0%, rgba(255, 80, 0, 0.06) 100%);
+}
+.renewal-banner.expired {
+  border-color: rgba(255, 59, 48, 0.3);
+  background: linear-gradient(135deg, rgba(255, 59, 48, 0.08) 0%, rgba(255, 40, 40, 0.06) 100%);
+}
+.renewal-banner-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 14px 18px; border: none; background: none;
+  font: inherit; cursor: pointer; color: var(--text);
+}
+.renewal-banner-left {
+  display: flex; align-items: center; gap: 10px;
+}
+.renewal-icon { color: #ffa000; flex-shrink: 0; }
+.renewal-banner.expired .renewal-icon { color: #ff3b30; }
+.renewal-banner-title {
+  font-size: 14px; font-weight: 600;
+}
+.renewal-chevron {
+  color: var(--text-secondary); transition: transform 0.2s ease; flex-shrink: 0;
+}
+.renewal-banner.collapsed .renewal-chevron {
+  transform: rotate(-90deg);
+}
+.renewal-banner-body {
+  padding: 0 18px 16px 46px;
+  overflow: hidden; transition: max-height 0.25s ease, padding 0.25s ease;
+  max-height: 200px;
+}
+.renewal-banner.collapsed .renewal-banner-body {
+  max-height: 0; padding-top: 0; padding-bottom: 0;
+}
+.renewal-banner-desc {
+  font-size: 13px; color: var(--text-secondary); margin: 0 0 12px 0; line-height: 1.5;
+}
+.renewal-banner-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border: none; border-radius: 8px;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: linear-gradient(135deg, #ffa000, #ff6d00); color: #fff;
+  transition: opacity 0.15s;
+}
+.renewal-banner.expired .renewal-banner-btn {
+  background: linear-gradient(135deg, #ff3b30, #ff1744);
+}
+.renewal-banner-btn:hover { opacity: 0.85; }
+
+/* Blurred/locked tool card */
+.card.card-locked {
+  position: relative; pointer-events: none; user-select: none;
+}
+.card.card-locked > *:not(.card-locked-overlay) {
+  filter: blur(6px);
+}
+.card.card-locked::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: rgba(0,0,0,0.4); z-index: 2;
+}
+.card-locked-overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px; z-index: 3;
+  color: #fff; text-align: center; pointer-events: auto;
+}
+.card-locked-overlay svg { opacity: 0.8; }
+.card-locked-overlay span { font-size: 12px; font-weight: 500; opacity: 0.9; }
+.card-locked-actions { display: flex; gap: 8px; margin-top: 4px; }
+.card-locked-overlay .card-locked-btn {
+  padding: 6px 14px; border: none; border-radius: 6px;
+  font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  background: var(--accent); color: #fff;
+}
+.card-locked-overlay .card-locked-delete {
+  background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8);
+}
+.card-locked-overlay .card-locked-delete:hover { background: rgba(255,59,48,0.6); color: #fff; }
+.card-locked-overlay .card-locked-btn:hover { opacity: 0.85; }
+
 /* Dashboard main */
 .dashboard { padding: 28px; flex: 1; overflow-y: auto; }
 

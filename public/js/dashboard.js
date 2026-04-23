@@ -234,6 +234,7 @@
     }
     updateAvatar();
     updateProUI(); // Update sidebar for Pro users
+    updateRenewalBanner(); // Check subscription expiry
     await loadTools();
     try { await loadStacks(); } catch (e) { console.warn('Stacks load failed:', e); }
     render();
@@ -437,6 +438,55 @@
     }
   }
 
+  /* ===== Subscription Renewal Banner ===== */
+  function updateRenewalBanner() {
+    const banner = $('#renewalBanner');
+    if (!banner || !currentUser) return;
+
+    const expiry = currentUser.subscription_expiry;
+    const isPro = isProUser();
+
+    // If user never had a subscription or is pro with no expiry concern, hide banner
+    if (!expiry) { banner.style.display = 'none'; return; }
+
+    const expiryDate = new Date(expiry);
+    const now = new Date();
+    const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+
+    if (isPro && daysLeft > 7) {
+      // Pro with plenty of time left — no banner
+      banner.style.display = 'none';
+      return;
+    }
+
+    banner.style.display = '';
+    const title = $('#renewalBannerTitle');
+    const desc = $('#renewalBannerDesc');
+
+    if (isPro && daysLeft > 0) {
+      // Expiring within 7 days
+      banner.classList.remove('expired');
+      title.textContent = `Your Pro subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
+      desc.textContent = 'Renew now to keep unlimited tool slots, unlimited stacks, and all Pro features without interruption.';
+    } else {
+      // Expired
+      banner.classList.add('expired');
+      const daysAgo = Math.abs(daysLeft);
+      title.textContent = 'Your Pro subscription has expired';
+      desc.textContent = `Your subscription expired ${daysAgo > 0 ? daysAgo + ' day' + (daysAgo === 1 ? '' : 's') + ' ago' : 'today'}. Renew to restore unlimited tools, unlimited stacks, and all Pro benefits.`;
+    }
+  }
+
+  // Banner accordion toggle
+  $('#renewalBannerToggle').addEventListener('click', () => {
+    $('#renewalBanner').classList.toggle('collapsed');
+  });
+
+  // Banner renew button opens Pro paywall
+  $('#renewalBannerBtn').addEventListener('click', () => {
+    $('#proOverlay').classList.add('open');
+  });
+
   function updateTierCounter() {
     // Always update referral widget (handles hiding for Pro)
     updateReferralWidget();
@@ -503,11 +553,27 @@
     }
   }
 
+  function isExpiredPro() {
+    if (!currentUser || isProUser()) return false;
+    const expiry = currentUser.subscription_expiry;
+    if (!expiry) return false;
+    return new Date(expiry) < new Date();
+  }
+
+  function getLockedToolIds() {
+    if (!isExpiredPro() || tools.length <= 20) return new Set();
+    // Keep oldest 20 tools accessible, lock the rest
+    const sorted = [...tools].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const locked = sorted.slice(20);
+    return new Set(locked.map(t => t.id));
+  }
+
   function render() {
     renderCategoryFilters();
     updateGreeting();
     renderStacks();
     updateTierCounter();
+    const lockedIds = getLockedToolIds();
     const filtered = tools.filter(t => {
       if (activeCategory !== 'All' && t.category !== activeCategory) return false;
       if (activePricing !== 'All' && t.pricing !== activePricing) return false;
@@ -523,6 +589,7 @@
     cardsGrid.style.display  = filtered.length === 0 ? 'none' : 'grid';
 
     cardsGrid.innerHTML = filtered.map((t, i) => {
+      const isLocked = lockedIds.has(t.id);
       const initials = t.name.slice(0, 2);
       const catClass = catClassMap[t.category] || 'cat-other';
       const linkHtml = t.url ? `<a class="card-link" href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>` : '';
@@ -534,8 +601,19 @@
         : '';
       const fallbackAvatar = `<div class="card-avatar-fallback ${catClass}" ${domain ? 'style="display:none"' : ''}>${esc(initials)}</div>`;
 
+      const lockedOverlay = isLocked ? `
+        <div class="card-locked-overlay">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Renew Pro to access</span>
+          <div class="card-locked-actions">
+            <button class="card-locked-btn" data-renew="1">Renew Pro</button>
+            <button class="card-locked-btn card-locked-delete" data-delete="${t.id}" title="Delete this tool">Delete</button>
+          </div>
+        </div>` : '';
+
       return `
-        <div class="card" style="animation-delay:${i * 40}ms" data-id="${t.id}" draggable="true">
+        <div class="card${isLocked ? ' card-locked' : ''}" style="animation-delay:${i * 40}ms" data-id="${t.id}" ${isLocked ? '' : 'draggable="true"'}>
+          ${lockedOverlay}
           <div class="card-header">
             <div class="card-avatar-wrap">
               ${faviconHtml}${fallbackAvatar}
@@ -952,6 +1030,9 @@
   deleteOverlay.addEventListener('click', (e) => { if (e.target === deleteOverlay) closeDelete(); });
 
   cardsGrid.addEventListener('click', (e) => {
+    // Renew Pro button on locked cards
+    const renewBtn = e.target.closest('[data-renew]');
+    if (renewBtn) { $('#proOverlay').classList.add('open'); return; }
     const editBtn = e.target.closest('[data-edit]');
     const delBtn  = e.target.closest('[data-delete]');
     if (editBtn) { const t = tools.find(x => x.id === Number(editBtn.dataset.edit)); if (t) openModal(t); }
