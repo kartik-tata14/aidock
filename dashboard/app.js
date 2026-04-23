@@ -160,35 +160,39 @@
 
   /* ===== Category helpers ===== */
   const CATEGORIES = [
-    'Coding & Development','Audio','Video & Images','Writing & Content',
-    'Workflow Automation','Research & Analysis','Design & UI',
-    'Chatbots & Assistants','Data & Analytics','Other'
+    'AI Agents','AI Automation','AI Workflow Builder','ChatBots',
+    'No-Code/Low-Code','App Builders','Web Scraping and Data','API and Integration',
+    'CRM','Sales','Email Assistants','Content Creation and Documentation',
+    'Calling and Voice','Marketing','Creative','Analytics and Data',
+    'Image','Video','Project Management','Customer Support',
+    'HR and Recruiting','Research','UI/UX','Prompt Engineering',
+    'Finance','Coding and Development','AI Consulting Tools','Other'
   ];
 
   const catClassMap = {
-    'Coding & Development': 'cat-coding',
-    'Audio': 'cat-audio',
-    'Video & Images': 'cat-video',
-    'Writing & Content': 'cat-writing',
-    'Workflow Automation': 'cat-workflow',
-    'Research & Analysis': 'cat-research',
-    'Design & UI': 'cat-design',
-    'Chatbots & Assistants': 'cat-chatbots',
-    'Data & Analytics': 'cat-data',
-    'Other': 'cat-other',
+    'AI Agents':'cat-ai-agents','AI Automation':'cat-ai-automation','AI Workflow Builder':'cat-ai-workflow',
+    'ChatBots':'cat-chatbots','No-Code/Low-Code':'cat-nocode','App Builders':'cat-app-builders',
+    'Web Scraping and Data':'cat-scraping','API and Integration':'cat-api','CRM':'cat-crm',
+    'Sales':'cat-sales','Email Assistants':'cat-email','Content Creation and Documentation':'cat-content',
+    'Calling and Voice':'cat-calling','Marketing':'cat-marketing','Creative':'cat-creative',
+    'Analytics and Data':'cat-analytics','Image':'cat-image','Video':'cat-video',
+    'Project Management':'cat-pm','Customer Support':'cat-support','HR and Recruiting':'cat-hr',
+    'Research':'cat-research','UI/UX':'cat-uiux','Prompt Engineering':'cat-prompt',
+    'Finance':'cat-finance','Coding and Development':'cat-coding','AI Consulting Tools':'cat-consulting',
+    'Other':'cat-other',
   };
 
   const catIconMap = {
-    'Coding & Development': '💻',
-    'Audio': '🎵',
-    'Video & Images': '🎬',
-    'Writing & Content': '✍️',
-    'Workflow Automation': '⚙️',
-    'Research & Analysis': '🔬',
-    'Design & UI': '🎨',
-    'Chatbots & Assistants': '🤖',
-    'Data & Analytics': '📊',
-    'Other': '📦',
+    'AI Agents':'🤖','AI Automation':'⚡','AI Workflow Builder':'🔄',
+    'ChatBots':'💬','No-Code/Low-Code':'🧩','App Builders':'📱',
+    'Web Scraping and Data':'🕷️','API and Integration':'🔌','CRM':'📇',
+    'Sales':'💰','Email Assistants':'📧','Content Creation and Documentation':'✍️',
+    'Calling and Voice':'📞','Marketing':'📣','Creative':'🎨',
+    'Analytics and Data':'📊','Image':'🖼️','Video':'🎬',
+    'Project Management':'📋','Customer Support':'🎧','HR and Recruiting':'👥',
+    'Research':'🔬','UI/UX':'🎯','Prompt Engineering':'💡',
+    'Finance':'💵','Coding and Development':'💻','AI Consulting Tools':'🧠',
+    'Other':'📦',
   };
 
   /* ===== Render category filter chips ===== */
