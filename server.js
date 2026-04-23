@@ -329,8 +329,8 @@ app.put('/api/auth/avatar', authMiddleware, async (req, res) => {
 // For USD: $4.99 = 499 cents, $39.99 = 3999 cents
 // TESTING: Monthly set to ₹1 (100 paise) - REVERT to 49900 after testing!
 const PRICING = {
-  monthly: { amount: 100, currency: 'INR', description: 'AIDock Pro - Monthly (TEST)' },
-  yearly: { amount: 399900, currency: 'INR', description: 'AIDock Pro - Yearly' }
+  monthly: { amount: 499, currency: 'USD', description: 'AIDock Pro - Monthly' },
+  yearly: { amount: 3999, currency: 'USD', description: 'AIDock Pro - Yearly' }
 };
 
 // Create Razorpay order
