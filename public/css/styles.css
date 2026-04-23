@@ -54,8 +54,12 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  margin: 0;
   -webkit-font-smoothing: antialiased;
   transition: background 0.3s, color 0.3s;
+}
+html:has(.app-body), html:has(.app-body) body {
+  height: 100vh; overflow: hidden;
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -1469,12 +1473,21 @@ a:hover { text-decoration: underline; }
 .topbar-right { display: flex; gap: 8px; align-items: center; }
 
 /* Sidebar */
-.app-body { display: flex; height: calc(100vh - 53px); }
+.app-body { display: flex; height: calc(100vh - 53px); overflow: hidden; }
 .sidebar {
   width: 230px; min-width: 230px;
   background: var(--surface); backdrop-filter: var(--blur);
-  border-right: 1px solid var(--border); padding: 16px 0; overflow-y: auto; flex-shrink: 0;
+  border-right: 1px solid var(--border); padding: 16px 0 0 0; overflow: hidden; flex-shrink: 0;
   display: flex; flex-direction: column;
+}
+#sidebarMyView {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+}
+.sidebar-scrollable {
+  flex: 1; overflow-y: auto; min-height: 0;
+}
+.sidebar-fixed {
+  flex-shrink: 0; border-top: 1px solid var(--border); margin-top: auto; padding-bottom: 0;
 }
 .sidebar-section { margin-bottom: 20px; }
 .sidebar-label {
@@ -2192,7 +2205,7 @@ a:hover { text-decoration: underline; }
 
 /* ===== Free Tier Widget ===== */
 .sidebar-tier {
-  margin-top: auto; padding: 16px; border-top: 1px solid var(--border);
+  margin-top: auto; padding: 16px; border-top: 1px solid var(--border); margin-bottom: 0;
 }
 .tier-badge-row {
   display: flex; align-items: center; gap: 8px; margin-bottom: 10px;

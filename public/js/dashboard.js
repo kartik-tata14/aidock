@@ -72,7 +72,7 @@
         myViewEl.style.display = '';
         socialViewEl.style.display = 'none';
         friendProfileOverlay.style.display = 'none';
-        if (sidebarMyView) sidebarMyView.style.display = '';
+        if (sidebarMyView) sidebarMyView.style.display = 'flex';
         if (sidebarSocialView) sidebarSocialView.style.display = 'none';
       } else {
         document.title = route.page === 'friend' ? 'Friend Profile — AIDock' : 'Social — AIDock';
