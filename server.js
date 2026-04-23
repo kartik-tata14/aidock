@@ -653,56 +653,264 @@ app.get('/api/fetch-description', authMiddleware, async (req, res) => {
     const pageTitle = titleMatch ? titleMatch[1] : '';
     const h1Match = html.match(/<h1[^>]*>([^<]{3,})<\/h1>/i);
     const h2Matches = [...html.matchAll(/<h2[^>]*>([^<]{3,})<\/h2>/gi)].map(m => m[1]).join(' ');
-    const blob = [targetUrl, pageTitle, desc, h1Match?.[1] || '', h2Matches].join(' ').toLowerCase();
-    
-    let domain = '';
-    try { domain = new URL(targetUrl).hostname.toLowerCase(); } catch {}
+    // Extract more signals for better classification
+    const metaKeywords = (html.match(/meta[^>]+name=["']keywords["'][^>]+content=["']([^"']+)["']/i) || [])[1] || '';
+    const ogTitle = (html.match(/meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) || [])[1] || '';
+    const ogSiteName = (html.match(/meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i) || [])[1] || '';
+    // Grab more paragraph text for context
+    const pMatches = [...html.matchAll(/<p[^>]*>([^<]{20,})<\/p>/gi)].slice(0, 10).map(m => m[1]).join(' ');
+    // Nav / hero text often has key descriptors
+    const heroText = (html.match(/<(?:section|div)[^>]*class=["'][^"']*hero[^"']*["'][^>]*>([\s\S]{0,2000}?)<\/(?:section|div)>/i) || [])[1] || '';
+    const heroClean = heroText.replace(/<[^>]+>/g, ' ');
 
-    const catKeywords = [
-      ['AI Agents', ['\\bagent\\b', 'ai agent', 'autonomous agent', 'multi-agent', 'crew ai', 'autogen', 'auto-gpt', 'babyagi', 'langchain agent', 'agent framework', 'agentic', 'agent orchestrat', 'agent workflow', 'superagent', 'ai assistant agent']],
-      ['AI Automation', ['automat', '\\brpa\\b', 'robotic process', 'ai automat', 'intelligent automat', 'batch process', 'auto-pilot', 'autopilot', 'trigger', 'schedule', 'recurring', 'repetitive task', 'streamlin', 'efficien']],
-      ['AI Workflow Builder', ['workflow', 'pipeline', 'orchestrat', 'flow builder', 'visual workflow', 'drag.?and.?drop', 'node.?based', 'workflow automat', 'process builder', 'flowchart', 'decision tree', 'workflow tool']],
-      ['ChatBots', ['chatbot', 'chat ai', 'conversational ai', '\\bgpt\\b', '\\bllm\\b', 'claude', 'gemini', 'openai', 'anthropic', 'chatgpt', 'character\\.ai', 'pi\\.ai', 'poe', 'perplexity', 'ai chat', 'chat with', 'language model', 'mistral', 'llama', 'groq', 'together ai', 'hugging face', 'ollama', 'chat completion', 'ai companion']],
-      ['No-Code/Low-Code', ['no-code', 'low-code', 'nocode', 'lowcode', 'no code', 'low code', 'visual develop', 'citizen develop', 'drag and drop', 'without cod', 'bubble', 'adalo', 'glide', 'softr', 'retool']],
-      ['App Builders', ['app builder', 'website builder', 'web builder', 'site builder', 'webflow', 'framer', 'wix', 'squarespace', 'wordpress', 'shopify', 'landing page builder', 'page builder', 'form builder', 'mobile app', 'flutter']],
-      ['Web Scraping and Data', ['scrap', 'crawl', 'web scrap', 'data extract', 'web extract', 'scraper', 'crawler', 'parse', 'beautifulsoup', 'puppeteer', 'playwright', 'selenium', 'apify', 'bright data', 'oxylabs', 'proxy', 'data collect', 'web data']],
-      ['API and Integration', ['\\bapi\\b', 'integrat', 'webhook', 'endpoint', 'rest api', 'graphql', 'zapier', 'make\\.com', 'ifttt', '\\bn8n\\b', 'connector', 'middleware', 'api gateway', 'postman', 'swagger', 'open ?api', '\\bsdk\\b', 'api manag', 'api platform']],
-      ['CRM', ['\\bcrm\\b', 'customer relationship', 'salesforce', 'hubspot', 'pipedrive', 'zoho crm', 'freshsales', 'deal', 'contact manag', 'lead manag', 'sales pipeline', 'crm platform', 'customer data']],
-      ['Sales', ['sales', 'revenue', 'prospect', 'outbound', 'cold email', 'lead gen', 'sales intel', 'quota', 'commission', 'sales engage', 'sales enabl', 'apollo', 'outreach', 'salesloft', 'gong', 'chorus', 'clari', 'deal clos', 'b2b sales', 'pipeline manag']],
-      ['Email Assistants', ['email', 'inbox', 'mail assist', 'email automat', 'email market', 'newsletter', 'cold email', 'email outreach', 'email ai', 'email writ', 'email template', 'mailchimp', 'sendgrid', 'email campaign', 'email sequence']],
-      ['Content Creation and Documentation', ['content creat', 'writing', 'copywriting', '\\bblog\\b', 'article', 'document', 'wiki', 'knowledge base', 'technical writ', 'copy\\.ai', 'jasper', 'writesonic', 'notion', 'confluence', 'gitbook', 'readme', 'content generat', 'ai writ', 'text generat', 'summariz', 'paraphrase', '\\bseo\\b', 'grammar']],
-      ['Calling and Voice', ['call', 'voice', 'phone', 'telephon', 'voip', 'voice ai', 'voice agent', 'voice clone', 'text-to-speech', '\\btts\\b', 'speech', 'transcri', 'elevenlabs', 'bland ai', 'vapi', 'air ai', 'voice bot', 'ivr', 'call center', 'dialer', 'podcast']],
-      ['Marketing', ['marketing', 'advertis', '\\bads\\b', 'campaign', 'growth', 'brand', 'social media', 'influencer', 'affiliate', 'conversion', 'funnel', 'landing page', 'ab test', 'a/b test', 'retarget', 'audience', '\\bcmo\\b', 'market research', 'digital market', 'google ads', 'facebook ads', 'meta ads']],
-      ['Creative', ['creative', 'design', 'art', 'illustration', 'graphic', 'visual', 'animation', '3d model', 'render', 'canva', 'adobe', 'sketch', 'figma design', 'creative tool', 'generative art', 'ai art', 'music', 'audio', 'sound', '\\bsong\\b']],
-      ['Analytics and Data', ['analytics', 'dashboard', 'visualiz', '\\bsql\\b', '\\bchart\\b', 'metric', 'monitor', 'bi tool', 'tableau', 'power bi', 'looker', 'amplitude', 'mixpanel', 'data analysis', 'data science', 'machine learning', '\\bml\\b', 'predict', 'forecast', 'business intelligence', 'kpi', 'report']],
-      ['Image', ['image generat', 'photo', 'image edit', 'generate image', 'diffusion', 'midjourney', 'dall-e', 'dall.e', 'stable diffusion', 'text to image', 'text-to-image', 'remove\\.bg', 'upscale', 'ai image', 'ai photo', 'img2img', 'clipdrop', 'leonardo', 'ideogram', 'background remov', 'photo edit', 'enhance', 'colorize', 'restore']],
-      ['Video', ['video', 'video edit', 'video generat', 'ai video', 'text to video', 'text-to-video', 'runway', 'pika', 'sora', 'heygen', 'synthesia', 'descript', 'kapwing', 'invideo', 'pictory', 'fliki', 'lumen5', 'subtitle', 'caption', 'screen record', 'thumbnail', '\\breel', 'short.?form', 'youtube', 'tiktok', 'luma']],
-      ['Project Management', ['project manag', 'task manag', 'productiv', 'kanban', 'gantt', 'sprint', 'agile', 'scrum', 'asana', 'clickup', 'monday', 'trello', 'jira', 'linear', 'basecamp', 'todoist', 'roadmap', 'milestone', 'backlog', 'time track']],
-      ['Customer Support', ['customer support', 'help desk', 'helpdesk', 'ticket', 'live chat', 'support bot', 'zendesk', 'intercom', 'freshdesk', 'crisp', 'drift', 'customer service', 'support agent', 'knowledge base', 'faq', 'chatbot support', 'customer success']],
-      ['HR and Recruiting', ['\\bhr\\b', 'recruit', 'hiring', 'talent', 'resume', 'job post', 'applicant', 'interview', 'onboard', 'employee', 'workforce', 'people ops', 'human resource', 'ats', 'linkedin recruit', 'candidate', 'staffing', 'payroll', 'performance review']],
-      ['Research', ['research', 'academic', 'scholar', 'arxiv', 'paper', 'citation', 'literature', 'peer review', 'semantic scholar', 'elicit', 'consensus', 'connected papers', 'scispace', 'research ai', 'discover', 'synthesis', 'evidence', 'knowledge', 'insight']],
-      ['UI/UX', ['\\bui\\b', '\\bux\\b', 'user interface', 'user experience', 'prototype', 'wireframe', 'figma', 'mockup', 'design system', 'uizard', 'galileo ai', 'responsive', 'mobile design', 'app design', 'product design', 'interaction design', 'usability']],
-      ['Prompt Engineering', ['prompt', 'prompt engineer', 'prompt template', 'prompt library', 'prompt optim', 'prompt chain', 'system prompt', 'few.?shot', 'chain.?of.?thought', 'prompt flow', 'promptbase', 'prompt market', 'llm prompt']],
-      ['Finance', ['finance', 'fintech', 'accounting', 'invoice', 'payment', 'banking', 'invest', 'trading', 'stock', 'crypto', 'blockchain', 'budget', 'expense', 'tax', 'financial', 'bookkeep', 'quickbooks', 'stripe', 'billing']],
-      ['Coding and Development', ['\\bcode\\b', 'developer', 'programming', '\\bide\\b', 'github', 'gitlab', 'coding', 'devtool', 'debug', 'compiler', 'terminal', 'deploy', 'ci/cd', 'software engineer', 'vscode', 'code generat', 'copilot', 'cursor', 'replit', 'codepen', 'stackblitz', 'codeium', 'tabnine', 'code assist', 'code complet', 'refactor', 'lint', 'devin', 'bolt\\.new', 'v0\\.dev', 'lovable', 'windsurf', 'aider', 'code review', 'pull request', 'version control', '\\bgit\\b', 'jupyter', 'python', 'javascript', 'typescript', 'react', 'vue', 'angular']],
-      ['AI Consulting Tools', ['ai consult', 'consult', 'advisor', 'strateg', 'framework', 'assessment', 'ai readiness', 'ai maturity', 'ai governance', 'ai ethics', 'ai policy', 'ai implement', 'digital transform', 'change manag', 'ai roadmap', 'ai adoption']]
-    ];
-    
-    let suggestedCategory = 'Other';
-    let maxScore = 0;
-    
-    for (const [cat, keywords] of catKeywords) {
-      let score = 0;
-      for (const k of keywords) {
-        const regex = new RegExp(k, 'gi');
-        const domainMatches = (domain.match(regex) || []).length;
-        const blobMatches = (blob.match(regex) || []).length;
-        score += domainMatches * 3 + blobMatches;
+    let domain = '';
+    try { domain = new URL(targetUrl).hostname.toLowerCase().replace(/^www\./, ''); } catch {}
+
+    // ══════════ TIER 1: Curated domain → category map (instant, 100% accurate) ══════════
+    const domainCategoryMap = {
+      // AI Agents
+      'crewai.com': 'AI Agents', 'autogen.microsoft.com': 'AI Agents', 'superagent.sh': 'AI Agents',
+      'fixie.ai': 'AI Agents', 'multion.ai': 'AI Agents', 'adept.ai': 'AI Agents',
+      'hyperwriteai.com': 'AI Agents', 'induced.ai': 'AI Agents', 'lindy.ai': 'AI Agents',
+      'relevanceai.com': 'AI Agents', 'agent.ai': 'AI Agents', 'agentops.ai': 'AI Agents',
+      'e2b.dev': 'AI Agents', 'composio.dev': 'AI Agents', 'browserbase.com': 'AI Agents',
+      'smithery.ai': 'AI Agents', 'wordware.ai': 'AI Agents',
+      // AI Automation
+      'bardeen.ai': 'AI Automation', 'axiom.ai': 'AI Automation', 'browse.ai': 'AI Automation',
+      'autom8.ai': 'AI Automation', 'procesio.com': 'AI Automation', 'tray.io': 'AI Automation',
+      'workato.com': 'AI Automation', 'uipath.com': 'AI Automation', 'automationanywhere.com': 'AI Automation',
+      // AI Workflow Builder
+      'n8n.io': 'AI Workflow Builder', 'make.com': 'AI Workflow Builder', 'zapier.com': 'AI Workflow Builder',
+      'pipedream.com': 'AI Workflow Builder', 'activepieces.com': 'AI Workflow Builder',
+      'buildship.com': 'AI Workflow Builder', 'windmill.dev': 'AI Workflow Builder',
+      'langflow.org': 'AI Workflow Builder', 'flowise.ai': 'AI Workflow Builder',
+      'stack-ai.com': 'AI Workflow Builder', 'rivet.ironcladapp.com': 'AI Workflow Builder',
+      'voiceflow.com': 'AI Workflow Builder', 'botpress.com': 'AI Workflow Builder',
+      // ChatBots
+      'chat.openai.com': 'ChatBots', 'chatgpt.com': 'ChatBots', 'claude.ai': 'ChatBots',
+      'gemini.google.com': 'ChatBots', 'poe.com': 'ChatBots', 'perplexity.ai': 'ChatBots',
+      'character.ai': 'ChatBots', 'pi.ai': 'ChatBots', 'you.com': 'ChatBots',
+      'groq.com': 'ChatBots', 'together.ai': 'ChatBots', 'huggingface.co': 'ChatBots',
+      'ollama.com': 'ChatBots', 'openrouter.ai': 'ChatBots', 'replicate.com': 'ChatBots',
+      'mistral.ai': 'ChatBots', 'cohere.com': 'ChatBots', 'deepseek.com': 'ChatBots',
+      'bing.com': 'ChatBots', 'meta.ai': 'ChatBots', 'phind.com': 'ChatBots',
+      // No-Code/Low-Code
+      'bubble.io': 'No-Code/Low-Code', 'adalo.com': 'No-Code/Low-Code', 'glideapps.com': 'No-Code/Low-Code',
+      'softr.io': 'No-Code/Low-Code', 'retool.com': 'No-Code/Low-Code', 'airtable.com': 'No-Code/Low-Code',
+      'appsheet.com': 'No-Code/Low-Code', 'stacker.app': 'No-Code/Low-Code',
+      'internal.io': 'No-Code/Low-Code', 'noloco.io': 'No-Code/Low-Code', 'nocodb.com': 'No-Code/Low-Code',
+      // App Builders
+      'webflow.com': 'App Builders', 'framer.com': 'App Builders', 'wix.com': 'App Builders',
+      'squarespace.com': 'App Builders', 'wordpress.com': 'App Builders', 'shopify.com': 'App Builders',
+      'carrd.co': 'App Builders', 'typedream.com': 'App Builders', 'dorik.com': 'App Builders',
+      'durable.co': 'App Builders', '10web.io': 'App Builders', 'hostinger.com': 'App Builders',
+      'flutterflow.io': 'App Builders',
+      // Web Scraping and Data
+      'apify.com': 'Web Scraping and Data', 'brightdata.com': 'Web Scraping and Data',
+      'oxylabs.io': 'Web Scraping and Data', 'scrapy.org': 'Web Scraping and Data',
+      'scrapingbee.com': 'Web Scraping and Data', 'webscraper.io': 'Web Scraping and Data',
+      'phantombuster.com': 'Web Scraping and Data', 'import.io': 'Web Scraping and Data',
+      'octoparse.com': 'Web Scraping and Data', 'diffbot.com': 'Web Scraping and Data',
+      'firecrawl.dev': 'Web Scraping and Data',
+      // API and Integration
+      'postman.com': 'API and Integration', 'rapidapi.com': 'API and Integration',
+      'swagger.io': 'API and Integration', 'stoplight.io': 'API and Integration',
+      'hoppscotch.io': 'API and Integration', 'insomnia.rest': 'API and Integration',
+      'ifttt.com': 'API and Integration', 'apideck.com': 'API and Integration',
+      'merge.dev': 'API and Integration', 'paragon.one': 'API and Integration',
+      // CRM
+      'salesforce.com': 'CRM', 'hubspot.com': 'CRM', 'pipedrive.com': 'CRM',
+      'zoho.com': 'CRM', 'freshsales.io': 'CRM', 'close.com': 'CRM',
+      'attio.com': 'CRM', 'folk.app': 'CRM', 'streak.com': 'CRM',
+      // Sales
+      'apollo.io': 'Sales', 'outreach.io': 'Sales', 'salesloft.com': 'Sales',
+      'gong.io': 'Sales', 'chorus.ai': 'Sales', 'clari.com': 'Sales',
+      'leadiq.com': 'Sales', 'zoominfo.com': 'Sales', 'seamless.ai': 'Sales',
+      'lusha.com': 'Sales', 'cognism.com': 'Sales', 'instantly.ai': 'Sales',
+      'lemlist.com': 'Sales', 'smartlead.ai': 'Sales', 'clay.com': 'Sales',
+      // Email Assistants
+      'mailchimp.com': 'Email Assistants', 'sendgrid.com': 'Email Assistants',
+      'convertkit.com': 'Email Assistants', 'beehiiv.com': 'Email Assistants',
+      'superhuman.com': 'Email Assistants', 'shortwave.com': 'Email Assistants',
+      'sanebox.com': 'Email Assistants', 'lavender.ai': 'Email Assistants',
+      'flowrite.com': 'Email Assistants', 'mailmeteor.com': 'Email Assistants',
+      // Content Creation and Documentation
+      'jasper.ai': 'Content Creation and Documentation', 'copy.ai': 'Content Creation and Documentation',
+      'writesonic.com': 'Content Creation and Documentation', 'rytr.me': 'Content Creation and Documentation',
+      'notion.so': 'Content Creation and Documentation', 'grammarly.com': 'Content Creation and Documentation',
+      'quillbot.com': 'Content Creation and Documentation', 'wordtune.com': 'Content Creation and Documentation',
+      'gitbook.com': 'Content Creation and Documentation', 'confluence.atlassian.com': 'Content Creation and Documentation',
+      'scribe.how': 'Content Creation and Documentation', 'tango.us': 'Content Creation and Documentation',
+      'frase.io': 'Content Creation and Documentation', 'surfer.ai': 'Content Creation and Documentation',
+      'clearscope.io': 'Content Creation and Documentation', 'writer.com': 'Content Creation and Documentation',
+      // Calling and Voice
+      'elevenlabs.io': 'Calling and Voice', 'play.ht': 'Calling and Voice',
+      'murf.ai': 'Calling and Voice', 'resemble.ai': 'Calling and Voice',
+      'bland.ai': 'Calling and Voice', 'vapi.ai': 'Calling and Voice',
+      'aircall.io': 'Calling and Voice', 'dialpad.com': 'Calling and Voice',
+      'otter.ai': 'Calling and Voice', 'fireflies.ai': 'Calling and Voice',
+      'speechify.com': 'Calling and Voice', 'suno.com': 'Calling and Voice',
+      'udio.com': 'Calling and Voice', 'wellsaidlabs.com': 'Calling and Voice',
+      'assemblyai.com': 'Calling and Voice', 'deepgram.com': 'Calling and Voice',
+      'retell.ai': 'Calling and Voice', 'synthflow.ai': 'Calling and Voice',
+      // Marketing
+      'hubspot.com': 'Marketing', 'semrush.com': 'Marketing', 'ahrefs.com': 'Marketing',
+      'buffer.com': 'Marketing', 'hootsuite.com': 'Marketing', 'sproutsocial.com': 'Marketing',
+      'later.com': 'Marketing', 'predis.ai': 'Marketing', 'jasper.ai': 'Marketing',
+      'adcreative.ai': 'Marketing', 'pencil.li': 'Marketing', 'omneky.com': 'Marketing',
+      // Creative
+      'canva.com': 'Creative', 'adobe.com': 'Creative', 'figma.com': 'Creative',
+      'dribbble.com': 'Creative', 'behance.net': 'Creative', 'pixlr.com': 'Creative',
+      'photopea.com': 'Creative',
+      // Analytics and Data
+      'tableau.com': 'Analytics and Data', 'amplitude.com': 'Analytics and Data',
+      'mixpanel.com': 'Analytics and Data', 'segment.com': 'Analytics and Data',
+      'looker.com': 'Analytics and Data', 'hex.tech': 'Analytics and Data',
+      'mode.com': 'Analytics and Data', 'metabase.com': 'Analytics and Data',
+      'julius.ai': 'Analytics and Data', 'rows.com': 'Analytics and Data',
+      // Image
+      'midjourney.com': 'Image', 'openai.com/dall-e': 'Image',
+      'stability.ai': 'Image', 'leonardo.ai': 'Image', 'ideogram.ai': 'Image',
+      'clipdrop.co': 'Image', 'remove.bg': 'Image', 'photoroom.com': 'Image',
+      'playground.com': 'Image', 'lexica.art': 'Image', 'nightcafe.studio': 'Image',
+      'getimg.ai': 'Image', 'krea.ai': 'Image', 'flux.ai': 'Image',
+      // Video
+      'runway.ml': 'Video', 'runwayml.com': 'Video', 'pika.art': 'Video',
+      'heygen.com': 'Video', 'synthesia.io': 'Video', 'descript.com': 'Video',
+      'kapwing.com': 'Video', 'invideo.io': 'Video', 'pictory.ai': 'Video',
+      'fliki.ai': 'Video', 'lumen5.com': 'Video', 'opus.pro': 'Video',
+      'captions.ai': 'Video', 'vizard.ai': 'Video', 'klap.app': 'Video',
+      'lumalabs.ai': 'Video', 'haiper.ai': 'Video', 'kling.ai': 'Video',
+      // Project Management
+      'asana.com': 'Project Management', 'clickup.com': 'Project Management',
+      'monday.com': 'Project Management', 'trello.com': 'Project Management',
+      'linear.app': 'Project Management', 'basecamp.com': 'Project Management',
+      'todoist.com': 'Project Management', 'notion.so': 'Project Management',
+      'height.app': 'Project Management', 'shortcut.com': 'Project Management',
+      // Customer Support
+      'zendesk.com': 'Customer Support', 'intercom.com': 'Customer Support',
+      'freshdesk.com': 'Customer Support', 'crisp.chat': 'Customer Support',
+      'drift.com': 'Customer Support', 'tidio.com': 'Customer Support',
+      'ada.cx': 'Customer Support', 'forethought.ai': 'Customer Support',
+      'helpscout.com': 'Customer Support', 'front.com': 'Customer Support',
+      // HR and Recruiting
+      'lever.co': 'HR and Recruiting', 'greenhouse.io': 'HR and Recruiting',
+      'ashbyhq.com': 'HR and Recruiting', 'workable.com': 'HR and Recruiting',
+      'deel.com': 'HR and Recruiting', 'rippling.com': 'HR and Recruiting',
+      'gusto.com': 'HR and Recruiting', 'bamboohr.com': 'HR and Recruiting',
+      'manatal.com': 'HR and Recruiting', 'fetcher.ai': 'HR and Recruiting',
+      // Research
+      'semanticscholar.org': 'Research', 'elicit.com': 'Research',
+      'consensus.app': 'Research', 'connectedpapers.com': 'Research',
+      'scispace.com': 'Research', 'scholarai.io': 'Research',
+      'researchrabbit.ai': 'Research', 'paperpal.com': 'Research',
+      'scite.ai': 'Research', 'undermind.ai': 'Research',
+      // UI/UX
+      'figma.com': 'UI/UX', 'uizard.io': 'UI/UX', 'maze.co': 'UI/UX',
+      'useberry.com': 'UI/UX', 'hotjar.com': 'UI/UX', 'locofy.ai': 'UI/UX',
+      'visily.ai': 'UI/UX', 'magician.design': 'UI/UX', 'miro.com': 'UI/UX',
+      // Prompt Engineering
+      'promptbase.com': 'Prompt Engineering', 'promptperfect.jina.ai': 'Prompt Engineering',
+      'flowgpt.com': 'Prompt Engineering', 'prompthero.com': 'Prompt Engineering',
+      'learnprompting.org': 'Prompt Engineering', 'promptingguide.ai': 'Prompt Engineering',
+      'snack.prompt.com': 'Prompt Engineering',
+      // Finance
+      'stripe.com': 'Finance', 'quickbooks.intuit.com': 'Finance',
+      'xero.com': 'Finance', 'brex.com': 'Finance', 'ramp.com': 'Finance',
+      'mercury.com': 'Finance', 'wise.com': 'Finance', 'plaid.com': 'Finance',
+      'coinbase.com': 'Finance', 'robinhood.com': 'Finance',
+      // Coding and Development
+      'github.com': 'Coding and Development', 'gitlab.com': 'Coding and Development',
+      'replit.com': 'Coding and Development', 'codepen.io': 'Coding and Development',
+      'stackblitz.com': 'Coding and Development', 'codesandbox.io': 'Coding and Development',
+      'cursor.com': 'Coding and Development', 'cursor.sh': 'Coding and Development',
+      'codeium.com': 'Coding and Development', 'tabnine.com': 'Coding and Development',
+      'sourcegraph.com': 'Coding and Development', 'vercel.com': 'Coding and Development',
+      'netlify.com': 'Coding and Development', 'railway.app': 'Coding and Development',
+      'render.com': 'Coding and Development', 'bolt.new': 'Coding and Development',
+      'v0.dev': 'Coding and Development', 'lovable.dev': 'Coding and Development',
+      'devin.ai': 'Coding and Development', 'windsurf.ai': 'Coding and Development',
+      'aider.chat': 'Coding and Development', 'continue.dev': 'Coding and Development',
+      'idx.dev': 'Coding and Development', 'gitpod.io': 'Coding and Development',
+      // AI Consulting Tools
+      'aiprm.com': 'AI Consulting Tools', 'theresanaiforthat.com': 'AI Consulting Tools',
+      'futurepedia.io': 'AI Consulting Tools', 'toolify.ai': 'AI Consulting Tools',
+      'topai.tools': 'AI Consulting Tools',
+    };
+
+    // Check exact domain first, then check if domain ends with a mapped domain
+    let suggestedCategory = null;
+    if (domainCategoryMap[domain]) {
+      suggestedCategory = domainCategoryMap[domain];
+    } else {
+      for (const [d, cat] of Object.entries(domainCategoryMap)) {
+        if (domain.endsWith('.' + d) || domain === d) {
+          suggestedCategory = cat;
+          break;
+        }
       }
-      if (score > maxScore) { maxScore = score; suggestedCategory = cat; }
     }
 
-    res.json({ description: desc, suggestedCategory });
+    // ══════════ TIER 2: Weighted keyword scoring across multiple signals ══════════
+    if (!suggestedCategory) {
+      const titleText = [pageTitle, ogTitle, ogSiteName].join(' ').toLowerCase();
+      const descText = desc.toLowerCase();
+      const headingText = [h1Match?.[1] || '', h2Matches].join(' ').toLowerCase();
+      const bodyText = [metaKeywords, pMatches, heroClean].join(' ').toLowerCase();
+      const domainText = domain + ' ' + targetUrl.toLowerCase();
+
+      const catKeywords = [
+        ['AI Agents', ['ai agent', 'autonomous agent', 'multi-agent', 'crew ai', 'autogen', 'auto-gpt', 'babyagi', 'langchain agent', 'agent framework', 'agentic', 'agent orchestrat', 'superagent', '\\bagent\\b']],
+        ['AI Automation', ['ai automat', 'intelligent automat', 'robotic process', '\\brpa\\b', 'automate your', 'automate task', 'auto-pilot', 'autopilot', 'batch process', 'automat']],
+        ['AI Workflow Builder', ['workflow builder', 'flow builder', 'visual workflow', 'workflow automat', 'node.?based', 'pipeline builder', 'process builder', 'drag.?and.?drop workflow', 'orchestrat']],
+        ['ChatBots', ['chatbot', 'chat ai', 'conversational ai', '\\bgpt\\b', '\\bllm\\b', 'claude', 'gemini', 'chatgpt', 'ai chat', 'language model', 'ai companion', 'virtual assistant', 'ai assistant']],
+        ['No-Code/Low-Code', ['no-code', 'low-code', 'nocode', 'lowcode', 'no code', 'low code', 'visual develop', 'citizen develop', 'without coding', 'codeless']],
+        ['App Builders', ['app builder', 'website builder', 'web builder', 'site builder', 'landing page builder', 'page builder', 'form builder', 'mobile app builder', 'build your website', 'build your app']],
+        ['Web Scraping and Data', ['web scrap', 'scraper', 'crawler', 'data extract', 'web extract', 'screen scrap', 'data collect', 'parse web', 'scraping']],
+        ['API and Integration', ['\\bapi\\b', 'integrat', 'webhook', 'rest api', 'graphql', 'api gateway', 'api manag', 'api platform', 'connector', 'middleware']],
+        ['CRM', ['\\bcrm\\b', 'customer relationship', 'contact manag', 'lead manag', 'sales pipeline', 'deal manag']],
+        ['Sales', ['sales enabl', 'sales engage', 'sales intel', 'outbound', 'cold outreach', 'prospect', 'lead gen', 'b2b sales', 'revenue intel', 'sales automat', 'sales tool']],
+        ['Email Assistants', ['email assist', 'email automat', 'email market', 'email campaign', 'email sequence', 'newsletter', 'inbox', 'email outreach', 'email writ', 'email ai', 'cold email']],
+        ['Content Creation and Documentation', ['content creat', 'copywriting', 'ai writ', 'content generat', 'blog writ', 'article generat', 'document', 'knowledge base', 'technical writ', '\\bseo\\b', 'grammar', 'paraphrase', 'summariz']],
+        ['Calling and Voice', ['voice ai', 'voice agent', 'voice clone', 'text-to-speech', '\\btts\\b', 'speech-to-text', 'transcri', 'voice bot', 'call center', 'ai call', 'voice generat', 'ai voice', 'voice over']],
+        ['Marketing', ['marketing', 'advertis', 'campaign manag', 'social media', 'digital market', 'growth market', 'ad creative', 'brand', 'influencer', 'seo tool', 'content market']],
+        ['Creative', ['creative tool', 'design tool', 'graphic design', 'illustration', 'generative art', 'ai art', 'creative ai', 'visual creat', 'animation', '3d model']],
+        ['Analytics and Data', ['analytics', 'data analysis', 'data visualiz', 'business intelligence', 'dashboard', '\\bsql\\b', 'data science', 'machine learning', '\\bml\\b', 'predict', 'forecast']],
+        ['Image', ['image generat', 'ai image', 'text to image', 'text-to-image', 'image edit', 'photo edit', 'ai photo', 'diffusion', 'generate image', 'image creat', 'background remov', 'upscal']],
+        ['Video', ['video generat', 'ai video', 'text to video', 'text-to-video', 'video edit', 'video creat', 'short.?form video', 'video ai', 'subtitle', 'screen record']],
+        ['Project Management', ['project manag', 'task manag', 'kanban', 'sprint', 'agile', 'scrum', 'roadmap', 'backlog', 'time track', 'team collaborat']],
+        ['Customer Support', ['customer support', 'help desk', 'helpdesk', 'support ticket', 'live chat', 'customer service', 'support bot', 'customer success']],
+        ['HR and Recruiting', ['\\bhr\\b', 'recruit', 'hiring', 'talent acqui', 'resume', 'job post', 'applicant track', 'onboard', 'human resource', 'employee', 'payroll']],
+        ['Research', ['research', 'academic', 'scholar', 'arxiv', 'paper', 'citation', 'literature review', 'scientific', 'research ai']],
+        ['UI/UX', ['\\bui\\b design', '\\bux\\b design', 'user interface', 'user experience', 'prototype', 'wireframe', 'design system', 'usability', 'interaction design', 'product design']],
+        ['Prompt Engineering', ['prompt engineer', 'prompt template', 'prompt library', 'prompt optim', 'system prompt', 'prompt market', 'prompt flow', 'llm prompt']],
+        ['Finance', ['fintech', 'accounting', 'invoice', 'financial', 'banking', 'bookkeep', 'expense manag', 'budget', 'payment process']],
+        ['Coding and Development', ['\\bcode\\b', 'developer', 'programming', '\\bide\\b', 'coding', 'code generat', 'code assist', 'code complet', 'code review', 'devtool', 'software engineer', 'deploy', 'ci/cd', 'version control']],
+        ['AI Consulting Tools', ['ai consult', 'ai readiness', 'ai maturity', 'ai governance', 'ai strateg', 'digital transform', 'ai adoption', 'ai tool director', 'ai implement']]
+      ];
+
+      let maxScore = 0;
+      for (const [cat, keywords] of catKeywords) {
+        let score = 0;
+        for (const k of keywords) {
+          const regex = new RegExp(k, 'gi');
+          // Multi-word phrases get bonus (more specific = more reliable)
+          const wordCount = k.replace(/\\b/g, '').split(/\s+/).length;
+          const phraseBonus = wordCount >= 2 ? wordCount * 2 : 1;
+
+          const domainHits = (domainText.match(regex) || []).length;
+          const titleHits = (titleText.match(regex) || []).length;
+          const descHits = (descText.match(regex) || []).length;
+          const headingHits = (headingText.match(regex) || []).length;
+          const bodyHits = (bodyText.match(regex) || []).length;
+
+          score += (domainHits * 10 + titleHits * 5 + descHits * 3 + headingHits * 2 + bodyHits) * phraseBonus;
+        }
+        if (score > maxScore) { maxScore = score; suggestedCategory = cat; }
+      }
+    }
+
+    res.json({ description: desc, suggestedCategory: suggestedCategory || 'Other' });
   } catch (err) {
     console.error('fetch-description error:', err.message);
     res.status(502).json({ error: 'Failed to fetch description: ' + (err.message || 'Unknown error') });
