@@ -3082,3 +3082,71 @@ a:hover { text-decoration: underline; }
   .steps { flex-direction: column; }
   .step-arrow { transform: rotate(90deg); }
 }
+
+/* ===== Onboarding Tour ===== */
+.onb-overlay {
+  position: fixed; inset: 0; z-index: 10000; pointer-events: auto;
+}
+.onb-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.onb-hole { transition: all 0.3s ease; }
+
+.onb-tooltip {
+  position: fixed; z-index: 10001; width: 340px; max-width: calc(100vw - 24px);
+  background: var(--surface-solid, #1c1c1e); border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 14px; padding: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  opacity: 0; transform: translateY(8px); transition: opacity 0.25s, transform 0.25s;
+  pointer-events: auto;
+}
+.onb-tooltip.onb-visible { opacity: 1; transform: translateY(0); }
+.onb-tooltip.onb-pos-center { transform: translate(-50%, -50%); }
+.onb-tooltip.onb-visible.onb-pos-center { transform: translate(-50%, -50%); }
+
+.onb-tooltip-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+}
+.onb-step-counter {
+  font-size: 11px; font-weight: 600; color: var(--accent, #0a84ff);
+  background: rgba(10,132,255,0.12); padding: 3px 10px; border-radius: 20px;
+}
+.onb-skip {
+  background: none; border: none; font: inherit; font-size: 12px; font-weight: 500;
+  color: var(--text-secondary, #888); cursor: pointer; padding: 2px 6px;
+}
+.onb-skip:hover { color: var(--text, #fff); }
+
+.onb-tooltip-title {
+  font-size: 16px; font-weight: 700; margin: 0 0 6px; color: var(--text, #fff);
+}
+.onb-tooltip-text {
+  font-size: 13px; line-height: 1.55; color: var(--text-secondary, #aaa); margin: 0 0 16px;
+}
+.onb-tooltip-text strong { color: var(--accent, #0a84ff); font-weight: 600; }
+
+.onb-next-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 9px 20px; border: none; border-radius: 10px;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: var(--accent, #0a84ff); color: #fff; transition: opacity 0.15s;
+}
+.onb-next-btn:hover { opacity: 0.85; }
+
+.onb-footer { display: flex; align-items: center; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
+.onb-dont-show { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #999; cursor: pointer; user-select: none; white-space: nowrap; }
+.onb-dont-show-cb { accent-color: var(--accent, #0a84ff); cursor: pointer; }
+
+.onb-tooltip-arrow { display: none; }
+
+/* Pulsing ring on click targets */
+.onb-target-active {
+  animation: onb-pulse 1.5s ease-in-out infinite;
+  position: relative;
+}
+@keyframes onb-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(10,132,255,0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(10,132,255,0); }
+}
+
+/* Elevate parent modal above the onboarding overlay during tour */
+.onb-elevated {
+  z-index: 10001 !important;
+}

@@ -258,6 +258,9 @@
       // Initiate payment after a brief delay
       setTimeout(() => initiatePayment(paymentPlan), 500);
     }
+
+    // Signal that dashboard is fully loaded (for onboarding)
+    document.dispatchEvent(new CustomEvent('aidock-dashboard-ready'));
   }
 
   async function loadTools() {
