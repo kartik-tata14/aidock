@@ -1,9 +1,6 @@
 (() => {
   'use strict';
 
-  // --- Config ---
-  // For local development: 'http://localhost:3000'
-  // For production: Change to your Vercel URL, e.g., 'https://aidock.vercel.app'
   const API_BASE = 'https://aidock-beta.vercel.app';
 
   // --- DOM refs ---
@@ -130,21 +127,33 @@
       if (recent.length > 0) {
         recentSection.style.display = '';
         recentList.innerHTML = recent.map(tool => {
-          const favicon = tool.url ? 
-            `<img src="https://www.google.com/s2/favicons?domain=${new URL(tool.url).hostname}&sz=32" onerror="this.style.display='none'; this.parentElement.innerHTML='📦'">` :
-            '📦';
+          const safeUrl = sanitizeUrl(tool.url);
+          let favicon = '📦';
+          try {
+            if (tool.url) {
+              const host = new URL(tool.url).hostname;
+              favicon = `<img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32" class="favicon-img">`;
+            }
+          } catch {}
           const timeAgo = getTimeAgo(new Date(tool.created_at));
           return `
-            <a href="${tool.url || '#'}" class="recent-item" target="_blank" rel="noopener">
+            <a href="${escapeHtml(safeUrl)}" class="recent-item" target="_blank" rel="noopener noreferrer">
               <div class="recent-favicon">${favicon}</div>
               <div class="recent-info">
                 <div class="recent-name">${escapeHtml(tool.name)}</div>
-                <div class="recent-category">${tool.category || 'Other'}</div>
+                <div class="recent-category">${escapeHtml(tool.category || 'Other')}</div>
               </div>
-              <span class="recent-time">${timeAgo}</span>
+              <span class="recent-time">${escapeHtml(timeAgo)}</span>
             </a>
           `;
         }).join('');
+        // Handle favicon load errors
+        recentList.querySelectorAll('.favicon-img').forEach(img => {
+          img.addEventListener('error', () => {
+            img.style.display = 'none';
+            img.parentElement.textContent = '📦';
+          });
+        });
       } else {
         recentSection.style.display = 'none';
       }
@@ -174,6 +183,16 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // --- URL sanitizer (prevent javascript: and other dangerous protocols) ---
+  function sanitizeUrl(url) {
+    if (!url) return '#';
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return url;
+    } catch {}
+    return '#';
   }
 
   // --- Toggle recent section ---
@@ -352,10 +371,7 @@
     } catch (err) {
       // Check if limit reached (403 status)
       if (err.status === 403 && err.message.includes('limit')) {
-        toolError.innerHTML = `
-          <strong>Slot limit reached!</strong><br>
-          <span style="font-size:11px; opacity:0.8">Opening dashboard to unlock more slots...</span>
-        `;
+        toolError.textContent = 'Slot limit reached! Opening dashboard to unlock more slots...';
         // Open dashboard with unlock modal trigger
         setTimeout(() => {
           chrome.tabs.create({ url: API_BASE + '/dashboard?showPaywall=1' });
