@@ -185,17 +185,24 @@
         <!-- My View Sidebar Content -->
         <div id="sidebarMyView">
         <div class="sidebar-scrollable">
+        <div class="sidebar-filter-heading">Filter</div>
         <div class="sidebar-section">
-          <div class="sidebar-label">Categories</div>
-          <div class="sidebar-list" id="categoryFilters">
+          <button class="sidebar-accordion" id="categoryAccordion">
+            <span>Categories</span>
+            <svg class="accordion-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="sidebar-list accordion-content" id="categoryFilters">
             <button class="sidebar-item active" data-filter="All">
               <span class="sidebar-icon">📁</span> All Tools
             </button>
           </div>
         </div>
         <div class="sidebar-section">
-          <div class="sidebar-label">Pricing</div>
-          <div class="sidebar-list" id="pricingFilters">
+          <button class="sidebar-accordion" id="pricingAccordion">
+            <span>Pricing</span>
+            <svg class="accordion-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="sidebar-list accordion-content" id="pricingFilters">
             <button class="sidebar-item pricing active" data-pricing="All">
               <span class="sidebar-icon">💰</span> All Pricing
             </button>

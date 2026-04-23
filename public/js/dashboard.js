@@ -960,6 +960,15 @@
 
   searchInput.addEventListener('input', (e) => { searchQuery = e.target.value; render(); });
 
+  // Accordion toggles
+  document.querySelectorAll('.sidebar-accordion').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const content = btn.nextElementSibling;
+      btn.classList.toggle('collapsed');
+      content.classList.toggle('collapsed');
+    });
+  });
+
   categoryFiltersEl.addEventListener('click', (e) => {
     const item = e.target.closest('.sidebar-item');
     if (!item) return;

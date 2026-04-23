@@ -1489,7 +1489,33 @@ a:hover { text-decoration: underline; }
 .sidebar-fixed {
   flex-shrink: 0; border-top: 1px solid var(--border); margin-top: auto; padding-bottom: 0;
 }
-.sidebar-section { margin-bottom: 20px; }
+.sidebar-section { margin-bottom: 4px; }
+.sidebar-filter-heading {
+  padding: 0 16px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-secondary); margin-bottom: 8px;
+}
+.sidebar-accordion {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 7px 16px; border: none; background: none;
+  font: inherit; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-secondary); cursor: pointer;
+  transition: color 0.15s;
+}
+.sidebar-accordion:hover { color: var(--text); }
+.accordion-arrow {
+  transition: transform 0.2s ease; flex-shrink: 0;
+}
+.sidebar-accordion.collapsed .accordion-arrow {
+  transform: rotate(-90deg);
+}
+.accordion-content {
+  display: flex; flex-direction: column; gap: 1px;
+  overflow: hidden; transition: max-height 0.25s ease;
+  max-height: 800px;
+}
+.accordion-content.collapsed {
+  max-height: 0;
+}
 .sidebar-label {
   padding: 0 16px; font-size: 11px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 6px;
