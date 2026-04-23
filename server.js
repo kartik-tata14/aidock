@@ -395,9 +395,12 @@ app.post('/api/payment/verify', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Invalid payment signature.' });
     }
     
-    // Calculate subscription expiry
+    // Calculate subscription expiry — extend from current expiry if still active
     const now = new Date();
-    let expiry = new Date();
+    const userResult = await db.execute("SELECT subscription_expiry FROM users WHERE id = ?", [req.user.id]);
+    const currentExpiry = userResult.rows[0]?.subscription_expiry ? new Date(userResult.rows[0].subscription_expiry) : null;
+    const baseDate = (currentExpiry && currentExpiry > now) ? currentExpiry : now;
+    let expiry = new Date(baseDate);
     if (plan === 'yearly') {
       expiry.setFullYear(expiry.getFullYear() + 1);
     } else {
