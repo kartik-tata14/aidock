@@ -1142,6 +1142,128 @@ app.post('/api/stacks/clone/:slug', authMiddleware, async (req, res) => {
   }
 });
 
+// ===== Community Trending =====
+
+// In-memory cache for trending results (2-day TTL)
+const trendingCache = {};
+const TRENDING_TTL = 2 * 24 * 60 * 60 * 1000; // 2 days
+
+function extractHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch { return null; }
+}
+
+function getCacheKey(category, role) {
+  return `${category || '_all_'}::${role || '_all_'}`;
+}
+
+app.get('/api/community/trending', authMiddleware, async (req, res) => {
+  try {
+    const category = (req.query.category || '').trim();
+    const role = (req.query.role || '').trim();
+    const cacheKey = getCacheKey(category, role);
+
+    // Check cache
+    if (trendingCache[cacheKey] && Date.now() - trendingCache[cacheKey].ts < TRENDING_TTL) {
+      return res.json(trendingCache[cacheKey].data);
+    }
+
+    // Build query
+    let sql = 'SELECT t.name, t.url, t.category, t.pricing, t.description, t.user_id FROM tools t';
+    const params = [];
+
+    if (role) {
+      sql += ' JOIN users u ON t.user_id = u.id WHERE (u.primary_role = ? OR u.secondary_role = ?)';
+      params.push(role, role);
+      if (category) {
+        sql += ' AND t.category = ?';
+        params.push(category);
+      }
+    } else if (category) {
+      sql += ' WHERE t.category = ?';
+      params.push(category);
+    }
+
+    // Only tools with a URL
+    sql += (params.length > 0 ? ' AND' : ' WHERE') + " t.url != '' AND t.url IS NOT NULL";
+
+    const result = await db.execute(sql, params);
+
+    // Group by hostname
+    const hostMap = {}; // hostname -> { users: Set, entries: [] }
+    for (const row of result.rows) {
+      const host = extractHost(row.url);
+      if (!host) continue;
+      if (!hostMap[host]) hostMap[host] = { users: new Set(), entries: [] };
+      hostMap[host].users.add(row.user_id);
+      hostMap[host].entries.push(row);
+    }
+
+    // Filter: must be saved by >= 2 users, sort by user count desc
+    const trending = Object.entries(hostMap)
+      .filter(([, v]) => v.users.size >= 2)
+      .sort((a, b) => b[1].users.size - a[1].users.size)
+      .slice(0, 10)
+      .map(([host, v]) => {
+        // Pick the most common name (mode)
+        const nameCounts = {};
+        const catCounts = {};
+        const pricingCounts = {};
+        let bestDesc = '';
+        let bestDescLen = 0;
+        for (const e of v.entries) {
+          nameCounts[e.name] = (nameCounts[e.name] || 0) + 1;
+          catCounts[e.category] = (catCounts[e.category] || 0) + 1;
+          pricingCounts[e.pricing] = (pricingCounts[e.pricing] || 0) + 1;
+          if ((e.description || '').length > bestDescLen) {
+            bestDesc = e.description;
+            bestDescLen = (e.description || '').length;
+          }
+        }
+        const mode = obj => Object.entries(obj).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+        return {
+          name: mode(nameCounts),
+          host,
+          url: 'https://' + host,
+          category: mode(catCounts),
+          pricing: mode(pricingCounts),
+          description: bestDesc || '',
+          user_count: v.users.size,
+        };
+      });
+
+    const response = { tools: trending, cached_at: new Date().toISOString() };
+    trendingCache[cacheKey] = { data: response, ts: Date.now() };
+    res.json(response);
+  } catch (err) {
+    console.error('Trending error:', err);
+    res.status(500).json({ error: 'Failed to fetch trending tools.' });
+  }
+});
+
+app.get('/api/community/filters', authMiddleware, async (req, res) => {
+  try {
+    const cacheKey = '_filters_';
+    if (trendingCache[cacheKey] && Date.now() - trendingCache[cacheKey].ts < TRENDING_TTL) {
+      return res.json(trendingCache[cacheKey].data);
+    }
+
+    const catResult = await db.execute("SELECT DISTINCT category FROM tools WHERE category != '' AND category IS NOT NULL ORDER BY category");
+    const categories = catResult.rows.map(r => r.category);
+
+    const roleResult = await db.execute("SELECT DISTINCT role FROM (SELECT primary_role AS role FROM users WHERE primary_role != '' UNION SELECT secondary_role AS role FROM users WHERE secondary_role != '') ORDER BY role");
+    const roles = roleResult.rows.map(r => r.role);
+
+    const response = { categories, roles };
+    trendingCache[cacheKey] = { data: response, ts: Date.now() };
+    res.json(response);
+  } catch (err) {
+    console.error('Filters error:', err);
+    res.status(500).json({ error: 'Failed to fetch filters.' });
+  }
+});
+
 // ===== Friends / Social =====
 
 // Helper to get all people a user can see (referrals + follows)

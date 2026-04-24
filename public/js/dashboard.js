@@ -86,6 +86,11 @@
           await loadFriends();
         }
         
+        // Load community trending
+        if (typeof initCommunity === 'function') {
+          await initCommunity();
+        }
+        
         // Handle friend profile page
         if (route.page === 'friend' && route.friendId) {
           await openFriendProfileById(route.friendId);
@@ -1642,6 +1647,165 @@
   }
   bindInviteBtn($('#socialInviteBtn'));
   bindInviteBtn($('#socialInviteBtnEmpty'));
+
+  /* ===== Community Trending ===== */
+  let trendingFiltersLoaded = false;
+  let trendingLoaded = false;
+
+  const CATEGORY_ICONS = {
+    'AI Agents': '🤖', 'AI Automation': '⚡', 'AI Workflow Builder': '🔄', 'ChatBots': '💬',
+    'No-Code/Low-Code': '🧩', 'App Builders': '📱', 'Web Scraping and Data': '🕷️',
+    'API and Integration': '🔌', 'CRM': '📇', 'Sales': '💰', 'Email Assistants': '📧',
+    'Content Creation and Documentation': '✍️', 'Calling and Voice': '📞', 'Marketing': '📣',
+    'Creative': '🎨', 'Analytics and Data': '📊', 'Image': '🖼️', 'Video': '🎬',
+    'Project Management': '📋', 'Customer Support': '🎧', 'HR and Recruiting': '👥',
+    'Research': '🔬', 'UI/UX': '🎯', 'Prompt Engineering': '💡', 'Finance': '💵',
+    'Coding and Development': '💻', 'AI Consulting Tools': '🧠', 'Other': '📦',
+  };
+
+  const ROLE_ICONS = {
+    'Marketing': '📣', 'Frontend Development': '🖥️', 'Backend Development': '⚙️',
+    'Full Stack Development': '💻', 'UI/UX Design': '🎯', 'Graphic Design': '🎨',
+    'Data Science': '📊', 'Data Analytics': '📈', 'Product Management': '📋',
+    'Project Management': '📋', 'Content Writing': '✍️', 'Copywriting': '📝',
+    'Sales': '💰', 'Customer Support': '🎧', 'HR / People Ops': '👥',
+    'Finance / Accounting': '💵', 'Legal': '⚖️', 'DevOps / SRE': '🛠️',
+    'Cybersecurity': '🔒', 'AI / ML Engineering': '🤖', 'Research': '🔬',
+    'Education / Training': '🎓', 'Video / Audio Production': '🎬',
+    'Consulting': '🧠', 'Founder / Entrepreneur': '🚀', 'Student': '📚', 'Other': '📦',
+  };
+
+  const PRICING_COLORS = { Free: 'var(--free)', Freemium: 'var(--freemium)', Paid: 'var(--paid)', Unknown: 'var(--unknown)' };
+
+  async function loadCommunityFilters() {
+    if (trendingFiltersLoaded) return;
+    try {
+      const data = await api('/api/community/filters');
+      const sidebarCatList = $('#socialCategoryFilters');
+      const sidebarIndustryList = $('#industryFilters');
+
+      // Populate sidebar filters
+      if (sidebarCatList && data.categories) {
+        sidebarCatList.innerHTML = data.categories.map(c =>
+          `<button class="sidebar-item" data-social-category="${c}"><span class="sidebar-icon">${CATEGORY_ICONS[c] || '📁'}</span> ${c}</button>`
+        ).join('');
+      }
+      if (sidebarIndustryList && data.roles) {
+        sidebarIndustryList.innerHTML = data.roles.map(r =>
+          `<button class="sidebar-item" data-social-role="${r}"><span class="sidebar-icon">${ROLE_ICONS[r] || '👤'}</span> ${r}</button>`
+        ).join('');
+      }
+
+      trendingFiltersLoaded = true;
+    } catch (e) { console.warn('Failed to load community filters:', e); }
+  }
+
+  async function loadTrendingTools(category, role) {
+    const grid = $('#trendingGrid');
+    const empty = $('#trendingEmpty');
+    if (!grid) return;
+
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (role) params.set('role', role);
+    const qs = params.toString();
+
+    try {
+      const data = await api('/api/community/trending' + (qs ? '?' + qs : ''));
+      const toolsList = data.tools || [];
+
+      if (toolsList.length === 0) {
+        grid.innerHTML = '';
+        grid.style.display = 'none';
+        if (empty) empty.style.display = '';
+        return;
+      }
+      if (empty) empty.style.display = 'none';
+      grid.style.display = '';
+
+      grid.innerHTML = toolsList.map((t, i) => {
+        const favicon = t.host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(t.host)}&sz=64` : '';
+        const pricingColor = PRICING_COLORS[t.pricing] || PRICING_COLORS.Unknown;
+        const rawDesc = (t.description || '').length > 120 ? t.description.slice(0, 120) + '…' : (t.description || 'No description available.');
+        const desc = esc(rawDesc);
+        const name = esc(t.name);
+        const cat = esc(t.category);
+        const safeUrl = t.url && (t.url.startsWith('https://') || t.url.startsWith('http://')) ? t.url : '#';
+        return `<div class="trending-card" style="animation-delay:${i * 0.04}s">
+          <img class="trending-card-favicon" src="${favicon}" alt="" loading="lazy" onerror="this.style.display='none'">
+          <div class="trending-card-body">
+            <div class="trending-card-top">
+              <span class="trending-card-name" title="${name}">${name}</span>
+            </div>
+            <div class="trending-card-badges" style="margin-bottom:4px">
+              <span class="trending-badge-cat">${cat}</span>
+              <span class="trending-badge-pricing" style="background:${pricingColor}" title="${t.pricing}"></span>
+            </div>
+            <p class="trending-card-desc">${desc}</p>
+            <div class="trending-card-footer">
+              <span class="trending-card-users">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+                Saved by ${t.user_count} users
+              </span>
+              <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="trending-card-visit">
+                Visit <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </a>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (e) {
+      console.warn('Failed to load trending:', e);
+      grid.innerHTML = '';
+      if (empty) { empty.style.display = ''; empty.querySelector('h3').textContent = 'Failed to load trending tools'; }
+    }
+  }
+
+  // Track active filters for sidebar
+  let activeSocialCategory = '';
+  let activeSocialRole = '';
+
+  // Wire sidebar filter clicks
+  document.addEventListener('click', (e) => {
+    const catBtn = e.target.closest('[data-social-category]');
+    if (catBtn) {
+      const val = catBtn.dataset.socialCategory;
+      // Toggle: if already active, clear filter
+      const isActive = catBtn.classList.contains('active');
+      document.querySelectorAll('#socialCategoryFilters .sidebar-item').forEach(b => b.classList.remove('active'));
+      if (!isActive) {
+        catBtn.classList.add('active');
+        activeSocialCategory = val;
+      } else {
+        activeSocialCategory = '';
+      }
+      loadTrendingTools(activeSocialCategory, activeSocialRole);
+      return;
+    }
+    const roleBtn = e.target.closest('[data-social-role]');
+    if (roleBtn) {
+      const val = roleBtn.dataset.socialRole;
+      const isActive = roleBtn.classList.contains('active');
+      document.querySelectorAll('#industryFilters .sidebar-item').forEach(b => b.classList.remove('active'));
+      if (!isActive) {
+        roleBtn.classList.add('active');
+        activeSocialRole = val;
+      } else {
+        activeSocialRole = '';
+      }
+      loadTrendingTools(activeSocialCategory, activeSocialRole);
+      return;
+    }
+  });
+
+  // Load trending when social view is first shown
+  async function initCommunity() {
+    await loadCommunityFilters();
+    if (!trendingLoaded) {
+      await loadTrendingTools('', '');
+      trendingLoaded = true;
+    }
+  }
 
   /* ===== Friends ===== */
   let friendsCache = [];

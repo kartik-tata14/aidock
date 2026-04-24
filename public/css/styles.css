@@ -2635,7 +2635,7 @@ a:hover { text-decoration: underline; }
 .view-toggle-btn.active svg { transform: scale(1.1); }
 
 /* ===== Social View ===== */
-.social-view { max-width: 900px; margin: 0 auto; }
+.social-view { max-width: none; }
 
 .social-hero {
   display: flex; align-items: center; justify-content: space-between;
@@ -2702,6 +2702,88 @@ a:hover { text-decoration: underline; }
 .social-empty .empty-icon { font-size: 40px; margin-bottom: 8px; }
 .social-empty h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .social-empty p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+
+/* Trending Filters */
+.trending-filters {
+  display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.trending-filter-select {
+  padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); cursor: pointer;
+  transition: border-color .2s;
+  min-width: 160px;
+}
+.trending-filter-select:focus { border-color: var(--accent); outline: none; }
+
+/* Trending Grid */
+.trending-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.trending-card {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--surface-solid); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px 18px;
+  transition: border-color .2s, box-shadow .2s, transform .2s;
+  animation: cardIn 0.35s ease both;
+}
+.trending-card:hover {
+  border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,.06);
+  transform: translateY(-2px);
+}
+.trending-card-favicon {
+  width: 36px; height: 36px; border-radius: 10px; object-fit: contain;
+  background: var(--accent-soft); padding: 4px; flex-shrink: 0;
+}
+.trending-card-body { flex: 1; min-width: 0; }
+.trending-card-top {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.trending-card-name {
+  font-size: 14px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.trending-card-badges {
+  display: flex; gap: 6px; align-items: center; flex-shrink: 0;
+}
+.trending-badge-cat {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 2px 7px; border-radius: 5px; white-space: nowrap;
+}
+.trending-badge-pricing {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.trending-card-desc {
+  font-size: 12px; color: var(--text-secondary); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin-bottom: 6px;
+}
+.trending-card-footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.trending-card-users {
+  font-size: 11px; font-weight: 600; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 4px;
+}
+.trending-card-users svg { flex-shrink: 0; }
+.trending-card-visit {
+  font-size: 11px; font-weight: 600; color: var(--accent);
+  text-decoration: none; display: flex; align-items: center; gap: 3px;
+  transition: opacity .15s;
+}
+.trending-card-visit:hover { opacity: 0.7; }
+
+/* Trending empty */
+.trending-empty {
+  text-align: center; padding: 40px 20px;
+  background: var(--surface); border: 1px dashed var(--border);
+  border-radius: 16px;
+}
+.trending-empty .empty-icon { font-size: 36px; margin-bottom: 8px; }
+.trending-empty h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+.trending-empty p { font-size: 12px; color: var(--text-secondary); margin: 0; }
 
 /* Friends Grid */
 .friends-grid {
