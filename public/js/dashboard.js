@@ -1069,6 +1069,23 @@
     });
   }
 
+  // General-purpose toast notification
+  function showToast(message, type) {
+    let toast = document.querySelector('.invite-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.className = 'invite-toast';
+      document.body.appendChild(toast);
+    }
+    const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ';
+    toast.textContent = `${icon} ${message}`;
+    toast.classList.remove('show');
+    // Force reflow to restart animation if already showing
+    void toast.offsetWidth;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+  }
+
   // Stacks invite widget copy
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('#stacksInviteCopyBtn');
@@ -1641,7 +1658,7 @@
     btn.addEventListener('click', () => {
       if (currentUser && currentUser.invite_code) {
         const link = location.origin + '/join/' + currentUser.invite_code;
-        navigator.clipboard.writeText(link).then(() => alert('Invite link copied! Share it with a friend.'));
+        navigator.clipboard.writeText(link).then(() => showToast('Invite link copied! Share it with a friend.', 'success'));
       }
     });
   }
@@ -1651,6 +1668,73 @@
   /* ===== Community Trending ===== */
   let trendingFiltersLoaded = false;
   let trendingLoaded = false;
+
+  // Dedicated click handler for trending grid - more reliable than document delegation
+  const trendingGridEl = $('#trendingGrid');
+  if (trendingGridEl) {
+    trendingGridEl.addEventListener('click', async (e) => {
+      // Handle "Add" button click
+      const addBtn = e.target.closest('.trending-btn-add');
+      if (addBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Check slot limit first (same logic as regular add tool)
+        const limit = getUserToolLimit();
+        if (tools.length >= limit) {
+          showToast(`Tool limit reached (${limit}/${limit}). Invite friends to unlock more slots!`, 'error');
+          return;
+        }
+        
+        const toolDataEncoded = addBtn.dataset.addTool;
+        if (!toolDataEncoded) {
+          console.warn('Add button missing data-add-tool attribute');
+          showToast('Unable to add tool - missing data', 'error');
+          return;
+        }
+        
+        let tool;
+        try {
+          const decoded = atob(toolDataEncoded);
+          const jsonStr = decodeURIComponent(decoded);
+          tool = JSON.parse(jsonStr);
+        } catch (decodeErr) {
+          console.error('Failed to decode tool data:', decodeErr);
+          showToast('Failed to parse tool data', 'error');
+          return;
+        }
+        
+        // Disable button while processing
+        addBtn.disabled = true;
+        addBtn.textContent = 'Adding...';
+        
+        try {
+          await api('/api/tools', { method: 'POST', body: JSON.stringify(tool) });
+          addBtn.classList.remove('trending-btn-add');
+          addBtn.classList.add('trending-btn-added');
+          addBtn.textContent = '✓ Added';
+          addBtn.removeAttribute('data-add-tool');
+          addBtn.disabled = false;
+          await loadTools();
+          showToast('Tool added to your dock!', 'success');
+        } catch (err) {
+          console.error('Add trending tool error:', err);
+          addBtn.textContent = '+ Add';
+          addBtn.disabled = false;
+          showToast(err.message || 'Failed to add tool', 'error');
+        }
+        return;
+      }
+      
+      // Handle click on already-added button
+      const addedBtn = e.target.closest('.trending-btn-added');
+      if (addedBtn) {
+        e.preventDefault();
+        showToast('This AI Tool is already in your dashboard', 'info');
+        return;
+      }
+    });
+  }
 
   const CATEGORY_ICONS = {
     'AI Agents': '🤖', 'AI Automation': '⚡', 'AI Workflow Builder': '🔄', 'ChatBots': '💬',
@@ -1723,33 +1807,50 @@
       if (empty) empty.style.display = 'none';
       grid.style.display = '';
 
+      // Get user's saved tool hosts for duplicate check
+      const savedHosts = new Set(tools.map(t => {
+        try { return new URL(t.url).hostname.replace(/^www\./, ''); } catch { return ''; }
+      }).filter(Boolean));
+
       grid.innerHTML = toolsList.map((t, i) => {
+        const rank = i + 1;
         const favicon = t.host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(t.host)}&sz=64` : '';
-        const pricingColor = PRICING_COLORS[t.pricing] || PRICING_COLORS.Unknown;
-        const rawDesc = (t.description || '').length > 120 ? t.description.slice(0, 120) + '…' : (t.description || 'No description available.');
+        const rawDesc = (t.description || '').length > 90 ? t.description.slice(0, 90) + '…' : (t.description || 'No description available.');
         const desc = esc(rawDesc);
         const name = esc(t.name);
         const cat = esc(t.category);
+        const pricing = t.pricing || 'Unknown';
         const safeUrl = t.url && (t.url.startsWith('https://') || t.url.startsWith('http://')) ? t.url : '#';
-        return `<div class="trending-card" style="animation-delay:${i * 0.04}s">
-          <img class="trending-card-favicon" src="${favicon}" alt="" loading="lazy" onerror="this.style.display='none'">
-          <div class="trending-card-body">
-            <div class="trending-card-top">
-              <span class="trending-card-name" title="${name}">${name}</span>
-            </div>
-            <div class="trending-card-badges" style="margin-bottom:4px">
+        const rankClass = rank <= 3 ? `trending-rank-${rank}` : 'trending-rank-other';
+        // Check if already in user's dock
+        const isAlreadyAdded = savedHosts.has(t.host);
+        const addBtnClass = isAlreadyAdded ? 'trending-btn-added' : 'trending-btn-add';
+        const addBtnText = isAlreadyAdded ? '✓ Added' : '+ Add';
+        // Encode tool data as base64 to avoid JSON escaping issues
+        const toolDataObj = {name: t.name, url: t.url, category: t.category, pricing: t.pricing, description: t.description};
+        const addBtnData = isAlreadyAdded ? '' : `data-add-tool="${btoa(encodeURIComponent(JSON.stringify(toolDataObj)))}"`;
+        
+        return `<div class="trending-card ${rankClass}" style="animation-delay:${i * 0.04}s">
+          <div class="trending-card-side">
+            <span class="trending-rank-num">${rank}</span>
+            <img class="trending-card-favicon" src="${favicon}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%236366f1%22><rect width=%2224%22 height=%2224%22 rx=%226%22/><text x=%2212%22 y=%2217%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2212%22 font-weight=%22bold%22>${name.charAt(0).toUpperCase()}</text></svg>'">
+          </div>
+          <div class="trending-card-main">
+            <h3 class="trending-card-name" title="${name}">${name}</h3>
+            <div class="trending-card-meta">
               <span class="trending-badge-cat">${cat}</span>
-              <span class="trending-badge-pricing" style="background:${pricingColor}" title="${t.pricing}"></span>
+              <span class="trending-badge-pricing-text">${pricing}</span>
             </div>
             <p class="trending-card-desc">${desc}</p>
             <div class="trending-card-footer">
-              <span class="trending-card-users">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-                Saved by ${t.user_count} users
+              <span class="trending-card-stats">
+                <span class="trending-fire">🔥</span>
+                <span class="trending-saved-text"><strong>${t.user_count}</strong> Users Saved it</span>
               </span>
-              <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="trending-card-visit">
-                Visit <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-              </a>
+              <div class="trending-card-actions">
+                <button type="button" class="${addBtnClass}" ${addBtnData}>${addBtnText}</button>
+                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="trending-btn-visit">Visit</a>
+              </div>
             </div>
           </div>
         </div>`;
@@ -1766,7 +1867,7 @@
   let activeSocialRole = '';
 
   // Wire sidebar filter clicks
-  document.addEventListener('click', (e) => {
+  document.addEventListener('click', async (e) => {
     const catBtn = e.target.closest('[data-social-category]');
     if (catBtn) {
       const val = catBtn.dataset.socialCategory;

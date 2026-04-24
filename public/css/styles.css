@@ -2703,77 +2703,276 @@ a:hover { text-decoration: underline; }
 .social-empty h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .social-empty p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
 
-/* Trending Filters */
-.trending-filters {
-  display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
-}
-.trending-filter-select {
-  padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 500;
-  border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface); color: var(--text); cursor: pointer;
-  transition: border-color .2s;
-  min-width: 160px;
-}
-.trending-filter-select:focus { border-color: var(--accent); outline: none; }
+/* ═══════════════════════════════════════════════════════════
+   TRENDING LEADERBOARD - Premium Discovery Cards
+   ═══════════════════════════════════════════════════════════ */
 
 /* Trending Grid */
 .trending-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
 }
+
+/* Base Card - Flexbox Layout */
 .trending-card {
-  display: flex; align-items: flex-start; gap: 12px;
-  background: var(--surface-solid); border: 1px solid var(--border);
-  border-radius: 14px; padding: 16px 18px;
-  transition: border-color .2s, box-shadow .2s, transform .2s;
-  animation: cardIn 0.35s ease both;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: cardIn 0.4s ease both;
 }
 .trending-card:hover {
-  border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,.06);
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 }
+
+/* Side Column - LEFT (rank on top, favicon bottom) */
+.trending-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 14px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  min-width: 68px;
+  flex-shrink: 0;
+}
+
+/* Rank Number */
+.trending-rank-num {
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--text-secondary);
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: -1px;
+}
+
+/* Favicon */
 .trending-card-favicon {
-  width: 36px; height: 36px; border-radius: 10px; object-fit: contain;
-  background: var(--accent-soft); padding: 4px; flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: var(--accent-soft);
+  padding: 4px;
+  flex-shrink: 0;
 }
-.trending-card-body { flex: 1; min-width: 0; }
-.trending-card-top {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+
+/* Main Content Area */
+.trending-card-main {
+  flex: 1;
+  min-width: 0; /* Prevent overflow */
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+
+/* Tool Name */
 .trending-card-name {
-  font-size: 14px; font-weight: 700; color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.trending-card-badges {
-  display: flex; gap: 6px; align-items: center; flex-shrink: 0;
+
+/* Meta Row: Category + Pricing */
+.trending-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .trending-badge-cat {
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
-  color: var(--accent); background: var(--accent-soft);
-  padding: 2px 7px; border-radius: 5px; white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
 }
-.trending-badge-pricing {
-  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+.trending-badge-pricing-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  background: var(--surface);
+  border-radius: 5px;
 }
+
+/* Description */
 .trending-card-desc {
-  font-size: 12px; color: var(--text-secondary); line-height: 1.4;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 2px 0;
+  flex: 1;
 }
+
+/* Footer with stats and buttons */
 .trending-card-footer {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
 }
-.trending-card-users {
-  font-size: 11px; font-weight: 600; color: var(--text-secondary);
-  display: flex; align-items: center; gap: 4px;
+
+/* Stats (Fire + users) */
+.trending-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 1;
+  min-width: 0;
 }
-.trending-card-users svg { flex-shrink: 0; }
-.trending-card-visit {
-  font-size: 11px; font-weight: 600; color: var(--accent);
-  text-decoration: none; display: flex; align-items: center; gap: 3px;
-  transition: opacity .15s;
+.trending-fire {
+  font-size: 14px;
+  animation: fireGlow 1.5s ease-in-out infinite;
 }
-.trending-card-visit:hover { opacity: 0.7; }
+@keyframes fireGlow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.trending-saved-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.trending-saved-text strong {
+  font-weight: 800;
+  color: var(--text);
+}
+
+/* Action Buttons - Inline */
+.trending-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.trending-btn-add,
+.trending-btn-added {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.trending-btn-add:hover {
+  background: var(--accent);
+  color: white;
+}
+.trending-btn-add:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.trending-btn-added {
+  border-color: #22c55e;
+  color: #22c55e;
+  cursor: default;
+}
+.trending-btn-visit {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.trending-btn-visit:hover {
+  background: var(--accent-hover, #4f46e5);
+}
+
+/* ═══ TOP 3 SPECIAL STYLING ═══ */
+
+/* 🥇 RANK 1 - GOLD */
+.trending-rank-1 {
+  border-color: rgba(255, 193, 7, 0.5);
+  background: linear-gradient(90deg, rgba(255, 215, 0, 0.1) 0%, var(--surface-solid) 30%);
+}
+.trending-rank-1:hover {
+  border-color: rgba(255, 193, 7, 0.7);
+  box-shadow: 0 12px 32px rgba(255, 193, 7, 0.18);
+}
+.trending-rank-1 .trending-card-side {
+  background: linear-gradient(180deg, rgba(255, 193, 7, 0.2) 0%, rgba(255, 193, 7, 0.08) 100%);
+}
+.trending-rank-1 .trending-rank-num {
+  color: #d4a500;
+  text-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+}
+
+/* 🥈 RANK 2 - SILVER */
+.trending-rank-2 {
+  border-color: rgba(158, 158, 158, 0.45);
+  background: linear-gradient(90deg, rgba(192, 192, 192, 0.12) 0%, var(--surface-solid) 30%);
+}
+.trending-rank-2:hover {
+  border-color: rgba(158, 158, 158, 0.65);
+  box-shadow: 0 12px 32px rgba(158, 158, 158, 0.18);
+}
+.trending-rank-2 .trending-card-side {
+  background: linear-gradient(180deg, rgba(158, 158, 158, 0.18) 0%, rgba(158, 158, 158, 0.06) 100%);
+}
+.trending-rank-2 .trending-rank-num {
+  color: #7a8288;
+  text-shadow: 0 2px 8px rgba(158, 158, 158, 0.25);
+}
+
+/* 🥉 RANK 3 - BRONZE */
+.trending-rank-3 {
+  border-color: rgba(205, 127, 50, 0.4);
+  background: linear-gradient(90deg, rgba(205, 127, 50, 0.1) 0%, var(--surface-solid) 30%);
+}
+.trending-rank-3:hover {
+  border-color: rgba(205, 127, 50, 0.6);
+  box-shadow: 0 12px 32px rgba(205, 127, 50, 0.18);
+}
+.trending-rank-3 .trending-card-side {
+  background: linear-gradient(180deg, rgba(205, 127, 50, 0.15) 0%, rgba(205, 127, 50, 0.05) 100%);
+}
+.trending-rank-3 .trending-rank-num {
+  color: #b36d2d;
+  text-shadow: 0 2px 8px rgba(205, 127, 50, 0.25);
+}
+
+/* Other Ranks (4-10) */
+.trending-rank-other:hover {
+  border-color: var(--accent);
+}
 
 /* Trending empty */
 .trending-empty {
