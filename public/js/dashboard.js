@@ -236,6 +236,7 @@
     updateProUI(); // Update sidebar for Pro users
     updateRenewalBanner(); // Check subscription expiry
     await loadTools();
+    updateUpgradeBanner(); // Nudge free users to upgrade (after tools loaded)
     try { await loadStacks(); } catch (e) { console.warn('Stacks load failed:', e); }
     render();
     // Initialize router after UI is ready
@@ -488,6 +489,56 @@
   // Banner renew button opens Pro paywall
   $('#renewalBannerBtn').addEventListener('click', () => {
     $('#proOverlay').classList.add('open');
+  });
+
+  // --- Upgrade promo banner for free users ---
+  function updateUpgradeBanner() {
+    const banner = $('#upgradeBanner');
+    if (!banner || !currentUser) return;
+
+    // Hide for Pro users or users who had a Pro subscription (they see renewal banner instead)
+    if (isProUser() || currentUser.subscription_expiry) { banner.style.display = 'none'; return; }
+
+    const dismissed = localStorage.getItem('aidock-upgrade-dismissed');
+    if (dismissed) {
+      const dismissedDate = new Date(parseInt(dismissed, 10));
+      const now = new Date();
+      // Show again after 3 days
+      if (now - dismissedDate < 3 * 24 * 60 * 60 * 1000) {
+        banner.style.display = 'none';
+        return;
+      }
+    }
+
+    const limit = getUserToolLimit();
+    const count = tools.length;
+    const limitEl = $('#upgradeBannerLimit');
+    const titleEl = $('#upgradeBannerTitle');
+    if (limitEl) limitEl.textContent = limit;
+
+    // Contextual title based on usage
+    if (count >= limit) {
+      titleEl.textContent = 'You\'ve hit your free tool limit — upgrade to Pro!';
+    } else if (count >= limit * 0.7) {
+      titleEl.textContent = `You\'re using ${count} of ${limit} free tools — go Pro for unlimited`;
+    } else {
+      titleEl.textContent = 'Upgrade to Pro for unlimited tools & stacks';
+    }
+
+    banner.style.display = '';
+  }
+
+  $('#upgradeBannerToggle').addEventListener('click', () => {
+    $('#upgradeBanner').classList.toggle('collapsed');
+  });
+
+  $('#upgradeBannerBtn').addEventListener('click', () => {
+    $('#proOverlay').classList.add('open');
+  });
+
+  $('#upgradeBannerDismiss').addEventListener('click', () => {
+    localStorage.setItem('aidock-upgrade-dismissed', Date.now().toString());
+    $('#upgradeBanner').style.display = 'none';
   });
 
   function updateTierCounter() {

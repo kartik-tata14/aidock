@@ -319,8 +319,29 @@
       </aside>
 
       <main class="dashboard" id="dashboard">
+        <!-- Upgrade Promo Banner (free users) -->
+        <div class="renewal-banner upgrade collapsed" id="upgradeBanner" style="display:none;">
+          <button class="renewal-banner-toggle" id="upgradeBannerToggle">
+            <div class="renewal-banner-left">
+              <svg class="renewal-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span class="renewal-banner-title" id="upgradeBannerTitle">Upgrade to Pro for unlimited tools & stacks</span>
+            </div>
+            <svg class="renewal-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="renewal-banner-body" id="upgradeBannerBody">
+            <p class="renewal-banner-desc">You're on the Free plan with a limit of <strong id="upgradeBannerLimit">20</strong> tools. Go Pro for unlimited tools, unlimited stacks, priority features, and more.</p>
+            <div class="upgrade-banner-actions">
+              <button class="renewal-banner-btn" id="upgradeBannerBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                Get Pro
+              </button>
+              <button class="upgrade-banner-dismiss" id="upgradeBannerDismiss">Dismiss</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Subscription Renewal Banner -->
-        <div class="renewal-banner" id="renewalBanner" style="display:none;">
+        <div class="renewal-banner collapsed" id="renewalBanner" style="display:none;">
           <button class="renewal-banner-toggle" id="renewalBannerToggle">
             <div class="renewal-banner-left">
               <svg class="renewal-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>

@@ -1589,6 +1589,25 @@ a:hover { text-decoration: underline; }
 }
 .renewal-banner-btn:hover { opacity: 0.85; }
 
+/* Upgrade promo banner (free users) */
+.renewal-banner.upgrade {
+  border-color: rgba(10, 132, 255, 0.3);
+  background: linear-gradient(135deg, rgba(10, 132, 255, 0.08) 0%, rgba(94, 92, 230, 0.06) 100%);
+}
+.renewal-banner.upgrade .renewal-icon { color: #0a84ff; }
+.renewal-banner.upgrade .renewal-banner-btn {
+  background: linear-gradient(135deg, #0a84ff, #5e5ce6);
+}
+.upgrade-banner-actions {
+  display: flex; align-items: center; gap: 12px;
+}
+.upgrade-banner-dismiss {
+  background: none; border: none; font: inherit; font-size: 13px;
+  color: var(--text-secondary); cursor: pointer; padding: 8px 4px;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.upgrade-banner-dismiss:hover { color: var(--text); }
+
 /* Blurred/locked tool card */
 .card.card-locked {
   position: relative; pointer-events: none; user-select: none;
