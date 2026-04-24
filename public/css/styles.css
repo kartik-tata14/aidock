@@ -1480,7 +1480,8 @@ a:hover { text-decoration: underline; }
   border-right: 1px solid var(--border); padding: 16px 0 0 0; overflow: hidden; flex-shrink: 0;
   display: flex; flex-direction: column;
 }
-#sidebarMyView {
+#sidebarMyView,
+#sidebarSocialView {
   display: flex; flex-direction: column; flex: 1; min-height: 0;
 }
 .sidebar-scrollable {
@@ -2707,11 +2708,36 @@ a:hover { text-decoration: underline; }
    TRENDING LEADERBOARD - Premium Discovery Cards
    ═══════════════════════════════════════════════════════════ */
 
-/* Trending Grid */
+/* Trending Ticker Tape */
 .trending-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+.trending-ticker-track {
+  display: flex;
   gap: 16px;
+  width: max-content;
+  animation: tickerScroll var(--ticker-duration, 40s) linear infinite;
+}
+.trending-ticker-track:hover {
+  animation-play-state: paused;
+}
+.trending-ticker-track.no-scroll {
+  animation: none;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.trending-ticker-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex-shrink: 0;
+  width: 370px;
+}
+@keyframes tickerScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
 /* Base Card - Flexbox Layout */
@@ -2724,10 +2750,10 @@ a:hover { text-decoration: underline; }
   border-radius: 16px;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: cardIn 0.4s ease both;
+  width: 100%;
+  flex-shrink: 0;
 }
 .trending-card:hover {
-  transform: translateY(-4px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 }
 

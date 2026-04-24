@@ -1812,7 +1812,8 @@
         try { return new URL(t.url).hostname.replace(/^www\./, ''); } catch { return ''; }
       }).filter(Boolean));
 
-      grid.innerHTML = toolsList.map((t, i) => {
+      // Build card HTML helper
+      function buildCard(t, i) {
         const rank = i + 1;
         const favicon = t.host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(t.host)}&sz=64` : '';
         const rawDesc = (t.description || '').length > 90 ? t.description.slice(0, 90) + '…' : (t.description || 'No description available.');
@@ -1822,15 +1823,13 @@
         const pricing = t.pricing || 'Unknown';
         const safeUrl = t.url && (t.url.startsWith('https://') || t.url.startsWith('http://')) ? t.url : '#';
         const rankClass = rank <= 3 ? `trending-rank-${rank}` : 'trending-rank-other';
-        // Check if already in user's dock
         const isAlreadyAdded = savedHosts.has(t.host);
         const addBtnClass = isAlreadyAdded ? 'trending-btn-added' : 'trending-btn-add';
         const addBtnText = isAlreadyAdded ? '✓ Added' : '+ Add';
-        // Encode tool data as base64 to avoid JSON escaping issues
         const toolDataObj = {name: t.name, url: t.url, category: t.category, pricing: t.pricing, description: t.description};
         const addBtnData = isAlreadyAdded ? '' : `data-add-tool="${btoa(encodeURIComponent(JSON.stringify(toolDataObj)))}"`;
-        
-        return `<div class="trending-card ${rankClass}" style="animation-delay:${i * 0.04}s">
+
+        return `<div class="trending-card ${rankClass}">
           <div class="trending-card-side">
             <span class="trending-rank-num">${rank}</span>
             <img class="trending-card-favicon" src="${favicon}" alt="" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%236366f1%22><rect width=%2224%22 height=%2224%22 rx=%226%22/><text x=%2212%22 y=%2217%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2212%22 font-weight=%22bold%22>${name.charAt(0).toUpperCase()}</text></svg>'">
@@ -1854,7 +1853,23 @@
             </div>
           </div>
         </div>`;
-      }).join('');
+      }
+
+      // Arrange into 2-row ticker columns
+      const cols = [];
+      for (let i = 0; i < toolsList.length; i += 2) {
+        const card1 = buildCard(toolsList[i], i);
+        const card2 = (i + 1 < toolsList.length) ? buildCard(toolsList[i + 1], i + 1) : '';
+        cols.push(`<div class="trending-ticker-col">${card1}${card2}</div>`);
+      }
+
+      // Determine if we need scrolling (more than ~3 columns visible)
+      const needsScroll = cols.length > 3;
+      const colsHtml = needsScroll ? cols.join('') + cols.join('') : cols.join('');
+      const duration = Math.max(15, cols.length * 8);
+      const noScrollClass = needsScroll ? '' : ' no-scroll';
+
+      grid.innerHTML = `<div class="trending-ticker-track${noScrollClass}" style="--ticker-duration:${duration}s">${colsHtml}</div>`;
     } catch (e) {
       console.warn('Failed to load trending:', e);
       grid.innerHTML = '';
