@@ -80,6 +80,27 @@
     .shared-creator-name {
       font-size: 15px; font-weight: 600; color: var(--text);
     }
+    .shared-creator-name a {
+      color: var(--text); text-decoration: none; transition: color .15s;
+    }
+    .shared-creator-name a:hover {
+      color: var(--accent); text-decoration: underline;
+    }
+    .shared-creator-follow {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; padding: 6px 14px; font-size: 12px;
+      font-weight: 600; cursor: pointer; transition: all .15s;
+      margin-left: 12px; flex-shrink: 0;
+    }
+    .shared-creator-follow:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .shared-creator-follow.following {
+      background: var(--surface-solid); color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .shared-creator-follow.following:hover {
+      border-color: #ff3b30; color: #ff3b30;
+    }
     .shared-meta {
       display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
       font-size: 13px; color: var(--text-secondary);
@@ -301,12 +322,17 @@
     const contentEl = document.getElementById('content');
     const toastEl = document.getElementById('toast');
     let isAuthenticated = false;
+    let currentUserId = null;
 
     // Check auth silently
     async function checkAuth() {
       try {
         const res = await fetch('/api/auth/me');
-        if (res.ok) { isAuthenticated = true; }
+        if (res.ok) {
+          isAuthenticated = true;
+          const data = await res.json();
+          currentUserId = data.user?.id || null;
+        }
       } catch {}
     }
 
@@ -383,8 +409,14 @@
               <div class="shared-creator-avatar" ${stack.creator_avatar ? `style="background-image:url(${stack.creator_avatar})"` : ''}>${stack.creator_avatar ? '' : esc(stack.creator_name.charAt(0).toUpperCase())}</div>
               <div class="shared-creator-info">
                 <span class="shared-creator-label">Created by</span>
-                <span class="shared-creator-name">${esc(stack.creator_name)}</span>
+                <span class="shared-creator-name">${isAuthenticated
+                  ? `<a href="/dashboard/social/friend/${stack.creator_id}">${esc(stack.creator_name)}</a>`
+                  : esc(stack.creator_name)}</span>
               </div>
+              ${isAuthenticated && !stack.is_own_stack ? `
+              <button class="shared-creator-follow ${stack.is_following ? 'following' : ''}" id="followCreatorBtn" data-uid="${stack.creator_id}">
+                ${stack.is_following ? 'Following' : '+ Follow'}
+              </button>` : ''}
             </div>
             <div class="shared-meta">
               <span class="shared-meta-item">
@@ -449,6 +481,39 @@
       document.getElementById('copyLinkBtn').addEventListener('click', () => {
         navigator.clipboard.writeText(window.location.href).then(() => showToast('Link copied!'));
       });
+
+      // Follow / Unfollow creator
+      const followBtn = document.getElementById('followCreatorBtn');
+      if (followBtn) {
+        followBtn.addEventListener('click', async () => {
+          const uid = followBtn.dataset.uid;
+          const isFollowing = followBtn.classList.contains('following');
+          followBtn.disabled = true;
+          try {
+            if (isFollowing) {
+              const res = await fetch(`/api/follows/${uid}`, { method: 'DELETE' });
+              if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+              followBtn.classList.remove('following');
+              followBtn.textContent = '+ Follow';
+              showToast('Unfollowed successfully.');
+            } else {
+              const res = await fetch('/api/follows', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: Number(uid) })
+              });
+              if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+              followBtn.classList.add('following');
+              followBtn.textContent = 'Following';
+              showToast('Now following ' + stack.creator_name + '!');
+            }
+          } catch (err) {
+            showToast(err.message || 'Action failed');
+          } finally {
+            followBtn.disabled = false;
+          }
+        });
+      }
 
       const cloneBtn = document.getElementById('cloneBtn');
       if (cloneBtn) cloneBtn.addEventListener('click', async () => {

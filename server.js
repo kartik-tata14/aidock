@@ -1089,6 +1089,20 @@ app.get('/api/stacks/public/:slug', async (req, res) => {
     const uResult = await db.execute("SELECT name, avatar FROM users WHERE id = ?", [stack.user_id]);
     stack.creator_name = uResult.rows[0]?.name || 'Unknown';
     stack.creator_avatar = uResult.rows[0]?.avatar || null;
+    stack.creator_id = stack.user_id;
+    // Check if the current user is following the creator (optional auth)
+    let currentUserId = null;
+    try {
+      const token = req.cookies.aidock_token || (req.headers.authorization || '').replace('Bearer ', '');
+      if (token) currentUserId = jwt.verify(token, JWT_SECRET).id;
+    } catch {}
+    stack.is_own_stack = currentUserId === stack.creator_id;
+    if (currentUserId && !stack.is_own_stack) {
+      const fResult = await db.execute("SELECT id FROM follows WHERE follower_id = ? AND followed_id = ?", [currentUserId, stack.creator_id]);
+      stack.is_following = fResult.rows.length > 0;
+    } else {
+      stack.is_following = false;
+    }
     const tr = await db.execute("SELECT t.id, t.name, t.url, t.category, t.pricing, st.description, st.notes, t.description as t_desc, t.notes as t_notes FROM tools t JOIN stack_tools st ON t.id = st.tool_id WHERE st.stack_id = ? ORDER BY st.sort_order, st.added_at", [stack.id]);
     stack.tools = tr.rows.map(r => ({ id: r.id, name: r.name, url: r.url, category: r.category, pricing: r.pricing, description: r.description || r.t_desc || '', notes: r.notes || r.t_notes || '' }));
     delete stack.user_id;
