@@ -6,10 +6,22 @@ const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const path = require('path');
 const Razorpay = require('razorpay');
+const { Resend } = require('resend');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+
+// Email verification via Resend
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_FROM = process.env.EMAIL_FROM || 'AIDock <onboarding@aidock.in>';
+let resend = null;
+if (RESEND_API_KEY) {
+  resend = new Resend(RESEND_API_KEY);
+  console.log('📧 Resend email verification enabled');
+} else {
+  console.log('⚠️ RESEND_API_KEY not set — email verification disabled (instant signup)');
+}
 
 // Razorpay configuration
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
@@ -178,6 +190,73 @@ function authMiddleware(req, res, next) {
 const MAX_REFERRALS = 5;
 const SLOTS_PER_REFERRAL = 2;
 const BASE_TOOL_LIMIT = 20;
+const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+
+// Helper: generate 6-digit OTP
+function generateOTP() {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+// Helper: send OTP email
+async function sendOTPEmail(email, otp, name) {
+  if (!resend) return false;
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: [email],
+      subject: `${otp} is your AIDock verification code`,
+      html: `
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+          <div style="text-align:center;margin-bottom:24px">
+            <span style="font-size:28px;font-weight:800;color:#f97316">⬡ AIDock</span>
+          </div>
+          <p style="font-size:15px;color:#333;margin-bottom:4px">Hi ${name},</p>
+          <p style="font-size:15px;color:#333;margin-bottom:24px">Enter this code to verify your email and complete your signup:</p>
+          <div style="text-align:center;margin:24px 0">
+            <span style="font-size:36px;font-weight:800;letter-spacing:8px;color:#111;background:#f5f5f5;padding:16px 32px;border-radius:12px;display:inline-block">${otp}</span>
+          </div>
+          <p style="font-size:13px;color:#888;text-align:center;margin-top:24px">This code expires in 10 minutes. If you didn't request this, ignore this email.</p>
+        </div>
+      `
+    });
+    return true;
+  } catch (err) {
+    console.error('OTP email send error:', err);
+    return false;
+  }
+}
+
+// Helper: create user from verified data (shared by OTP and direct signup flows)
+async function createVerifiedUser({ name, email, password_hash, primary_role, secondary_role, invite_code }) {
+  const newInviteCode = crypto.randomBytes(6).toString('hex');
+
+  let referrerId = null;
+  if (invite_code && typeof invite_code === 'string' && invite_code.trim()) {
+    const ref = await db.execute("SELECT id FROM users WHERE invite_code = ?", [invite_code.trim()]);
+    if (ref.rows.length > 0) referrerId = ref.rows[0].id;
+  }
+
+  await db.execute(
+    "INSERT INTO users (name, email, password_hash, primary_role, secondary_role, invite_code, referred_by, tool_limit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [name, email, password_hash, primary_role, secondary_role, newInviteCode, referrerId, BASE_TOOL_LIMIT]
+  );
+  const userId = await getLastInsertId();
+
+  if (referrerId) {
+    const refCount = await db.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", [referrerId]);
+    const currentRefs = refCount.rows[0].cnt || 0;
+    if (currentRefs < MAX_REFERRALS) {
+      try {
+        await db.execute("INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)", [referrerId, userId]);
+        await db.execute("UPDATE users SET tool_limit = MIN(tool_limit + ?, ?) WHERE id = ?",
+          [SLOTS_PER_REFERRAL, BASE_TOOL_LIMIT + MAX_REFERRALS * SLOTS_PER_REFERRAL, referrerId]);
+      } catch {}
+    }
+  }
+  db.saveToFile();
+
+  return { id: userId, name, email, primary_role, secondary_role };
+}
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
@@ -185,46 +264,140 @@ app.post('/api/auth/signup', async (req, res) => {
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email and password are required.' });
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
 
-    const existing = await db.execute("SELECT id FROM users WHERE email = ?", [email.toLowerCase().trim()]);
+    const emailNorm = email.toLowerCase().trim();
+    const existing = await db.execute("SELECT id FROM users WHERE email = ?", [emailNorm]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: 'An account with this email already exists.' });
     }
 
-    const newInviteCode = crypto.randomBytes(6).toString('hex');
     const hash = await bcrypt.hash(password, 10);
 
-    let referrerId = null;
-    if (invite_code && typeof invite_code === 'string' && invite_code.trim()) {
-      const ref = await db.execute("SELECT id FROM users WHERE invite_code = ?", [invite_code.trim()]);
-      if (ref.rows.length > 0) referrerId = ref.rows[0].id;
-    }
+    // If email verification is enabled (Resend configured), use OTP flow
+    if (resend) {
+      const otp = generateOTP();
+      const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
 
-    await db.execute(
-      "INSERT INTO users (name, email, password_hash, primary_role, secondary_role, invite_code, referred_by, tool_limit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [name.trim(), email.toLowerCase().trim(), hash, (primary_role || '').trim(), (secondary_role || '').trim(), newInviteCode, referrerId, BASE_TOOL_LIMIT]
-    );
-    const userId = await getLastInsertId();
+      // Delete any existing pending verification for this email
+      await db.execute("DELETE FROM email_verifications WHERE email = ?", [emailNorm]);
 
-    if (referrerId) {
-      const refCount = await db.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", [referrerId]);
-      const currentRefs = refCount.rows[0].cnt || 0;
-      if (currentRefs < MAX_REFERRALS) {
-        try {
-          await db.execute("INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)", [referrerId, userId]);
-          await db.execute("UPDATE users SET tool_limit = MIN(tool_limit + ?, ?) WHERE id = ?",
-            [SLOTS_PER_REFERRAL, BASE_TOOL_LIMIT + MAX_REFERRALS * SLOTS_PER_REFERRAL, referrerId]);
-        } catch {}
+      // Store pending verification
+      await db.execute(
+        "INSERT INTO email_verifications (email, name, password_hash, primary_role, secondary_role, invite_code, otp_hash, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [emailNorm, name.trim(), hash, (primary_role || '').trim(), (secondary_role || '').trim(), (invite_code || '').trim(), otpHash, expiresAt]
+      );
+      db.saveToFile();
+
+      const sent = await sendOTPEmail(emailNorm, otp, name.trim());
+      if (!sent) {
+        return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
       }
-    }
-    db.saveToFile();
 
-    const user = { id: userId, name: name.trim(), email: email.toLowerCase().trim(), primary_role: (primary_role || '').trim(), secondary_role: (secondary_role || '').trim() };
+      return res.json({ pending: true, email: emailNorm, message: 'Verification code sent to your email.' });
+    }
+
+    // Fallback: no email verification (dev mode / Resend not configured)
+    const user = await createVerifiedUser({
+      name: name.trim(), email: emailNorm, password_hash: hash,
+      primary_role: (primary_role || '').trim(), secondary_role: (secondary_role || '').trim(),
+      invite_code
+    });
     const token = generateToken(user);
     res.cookie('aidock_token', token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
     res.json({ user, token });
   } catch (err) {
     console.error('Signup error:', err);
     res.status(500).json({ error: 'Signup failed. Please try again.' });
+  }
+});
+
+// Verify OTP and complete signup
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and verification code are required.' });
+
+    const emailNorm = email.toLowerCase().trim();
+    const otpHash = crypto.createHash('sha256').update(otp.toString().trim()).digest('hex');
+
+    const result = await db.execute(
+      "SELECT * FROM email_verifications WHERE email = ? AND otp_hash = ?",
+      [emailNorm, otpHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid verification code.' });
+    }
+
+    const pending = result.rows[0];
+
+    // Check expiry
+    if (new Date(pending.expires_at) < new Date()) {
+      await db.execute("DELETE FROM email_verifications WHERE email = ?", [emailNorm]);
+      db.saveToFile();
+      return res.status(410).json({ error: 'Verification code has expired. Please sign up again.' });
+    }
+
+    // Check if someone else registered this email in the meantime
+    const existingNow = await db.execute("SELECT id FROM users WHERE email = ?", [emailNorm]);
+    if (existingNow.rows.length > 0) {
+      await db.execute("DELETE FROM email_verifications WHERE email = ?", [emailNorm]);
+      db.saveToFile();
+      return res.status(409).json({ error: 'An account with this email already exists.' });
+    }
+
+    // Create the real user account
+    const user = await createVerifiedUser({
+      name: pending.name,
+      email: emailNorm,
+      password_hash: pending.password_hash,
+      primary_role: pending.primary_role || '',
+      secondary_role: pending.secondary_role || '',
+      invite_code: pending.invite_code || ''
+    });
+
+    // Clean up the pending verification
+    await db.execute("DELETE FROM email_verifications WHERE email = ?", [emailNorm]);
+    db.saveToFile();
+
+    const token = generateToken(user);
+    res.cookie('aidock_token', token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+    res.json({ user, token });
+  } catch (err) {
+    console.error('OTP verification error:', err);
+    res.status(500).json({ error: 'Verification failed. Please try again.' });
+  }
+});
+
+// Resend OTP
+app.post('/api/auth/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    const emailNorm = email.toLowerCase().trim();
+    const pending = await db.execute("SELECT name FROM email_verifications WHERE email = ?", [emailNorm]);
+    if (pending.rows.length === 0) {
+      return res.status(404).json({ error: 'No pending verification found. Please sign up again.' });
+    }
+
+    const otp = generateOTP();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
+
+    await db.execute("UPDATE email_verifications SET otp_hash = ?, expires_at = ? WHERE email = ?",
+      [otpHash, expiresAt, emailNorm]);
+    db.saveToFile();
+
+    const sent = await sendOTPEmail(emailNorm, otp, pending.rows[0].name);
+    if (!sent) {
+      return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
+    }
+
+    res.json({ ok: true, message: 'New verification code sent.' });
+  } catch (err) {
+    console.error('Resend OTP error:', err);
+    res.status(500).json({ error: 'Failed to resend code. Please try again.' });
   }
 });
 
@@ -1728,6 +1901,24 @@ async function initSchema() {
   )`);
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id)"); } catch {}
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_follows_followed ON follows(followed_id)"); } catch {}
+  
+  // Email verifications table (OTP-based signup flow)
+  await db.execute(`CREATE TABLE IF NOT EXISTS email_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    primary_role TEXT DEFAULT '',
+    secondary_role TEXT DEFAULT '',
+    invite_code TEXT DEFAULT '',
+    otp_hash TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT (datetime('now'))
+  )`);
+  try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ev_email ON email_verifications(email)"); } catch {}
+  
+  // Clean up expired pending verifications (older than 1 hour)
+  try { await db.execute("DELETE FROM email_verifications WHERE expires_at < datetime('now', '-1 hour')"); } catch {}
   
   // Backfill invite codes
   const noCode = await db.execute("SELECT id FROM users WHERE invite_code IS NULL OR invite_code = ''");

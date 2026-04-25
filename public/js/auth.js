@@ -17,15 +17,18 @@
 
   const signupView = document.getElementById('signupView');
   const loginView  = document.getElementById('loginView');
+  const otpView    = document.getElementById('otpView');
 
   document.getElementById('showLogin').addEventListener('click', (e) => {
     e.preventDefault();
     signupView.style.display = 'none';
+    otpView.style.display = 'none';
     loginView.style.display = 'block';
   });
   document.getElementById('showSignup').addEventListener('click', (e) => {
     e.preventDefault();
     loginView.style.display = 'none';
+    otpView.style.display = 'none';
     signupView.style.display = 'block';
   });
 
@@ -50,6 +53,118 @@
     reader.readAsDataURL(file);
   });
 
+  // ===== OTP Verification State =====
+  let pendingEmail = '';
+  let otpCountdownInterval = null;
+
+  function showOtpView(email) {
+    pendingEmail = email;
+    signupView.style.display = 'none';
+    loginView.style.display = 'none';
+    otpView.style.display = 'block';
+    document.getElementById('otpEmail').textContent = email;
+    document.getElementById('otpInput').value = '';
+    document.getElementById('otpError').textContent = '';
+    document.getElementById('otpInput').focus();
+    startOtpCountdown();
+  }
+
+  function startOtpCountdown() {
+    const timerEl = document.getElementById('otpTimer');
+    const countdownEl = document.getElementById('otpCountdown');
+    const resendBtn = document.getElementById('otpResendBtn');
+    let seconds = 60;
+    timerEl.style.display = '';
+    resendBtn.style.display = 'none';
+    countdownEl.textContent = seconds;
+    clearInterval(otpCountdownInterval);
+    otpCountdownInterval = setInterval(() => {
+      seconds--;
+      countdownEl.textContent = seconds;
+      if (seconds <= 0) {
+        clearInterval(otpCountdownInterval);
+        timerEl.style.display = 'none';
+        resendBtn.style.display = '';
+      }
+    }, 1000);
+  }
+
+  // Back to signup form
+  document.getElementById('otpBackBtn').addEventListener('click', () => {
+    clearInterval(otpCountdownInterval);
+    otpView.style.display = 'none';
+    signupView.style.display = 'block';
+  });
+
+  // Resend OTP
+  document.getElementById('otpResendBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('otpResendBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      const res = await fetch('/api/auth/resend-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('otpError').textContent = data.error || 'Failed to resend.';
+      } else {
+        startOtpCountdown();
+      }
+    } catch {
+      document.getElementById('otpError').textContent = 'Network error. Please try again.';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Resend Code';
+  });
+
+  // Verify OTP
+  document.getElementById('otpForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('otpError');
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    errEl.textContent = '';
+    const otp = document.getElementById('otpInput').value.trim();
+    if (!otp || otp.length !== 6) {
+      errEl.textContent = 'Please enter the 6-digit code.';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail, otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errEl.textContent = data.error || 'Verification failed.';
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+      }
+      // Account created! Upload avatar if selected
+      if (avatarDataUrl) {
+        btn.textContent = 'Uploading avatar…';
+        await fetch('/api/auth/avatar', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ avatar: avatarDataUrl }),
+        });
+      }
+      btn.textContent = 'Success! Redirecting…';
+      window.location.href = redirectUrl;
+    } catch {
+      errEl.textContent = 'Network error. Please try again.';
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
+
   // Signup
   document.getElementById('signupForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -66,7 +181,7 @@
 
     // Show loading state
     btn.disabled = true;
-    btn.textContent = 'Creating account...';
+    btn.textContent = 'Creating account…';
 
     try {
       const res = await fetch('/api/auth/signup', {
@@ -82,9 +197,17 @@
         return; 
       }
 
-      // Upload avatar if selected
+      // OTP flow: server returned { pending: true }
+      if (data.pending) {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        showOtpView(data.email);
+        return;
+      }
+
+      // Direct flow (no email verification configured): account already created
       if (avatarDataUrl) {
-        btn.textContent = 'Uploading avatar...';
+        btn.textContent = 'Uploading avatar…';
         await fetch('/api/auth/avatar', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -92,7 +215,7 @@
         });
       }
 
-      btn.textContent = 'Success! Redirecting...';
+      btn.textContent = 'Success! Redirecting…';
       window.location.href = redirectUrl;
     } catch { 
       errEl.textContent = 'Network error. Please try again.'; 
@@ -114,7 +237,7 @@
 
     // Show loading state
     btn.disabled = true;
-    btn.textContent = 'Signing in...';
+    btn.textContent = 'Signing in…';
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -129,7 +252,7 @@
         btn.textContent = originalText;
         return; 
       }
-      btn.textContent = 'Success! Redirecting...';
+      btn.textContent = 'Success! Redirecting…';
       window.location.href = redirectUrl;
     } catch { 
       errEl.textContent = 'Network error. Please try again.'; 

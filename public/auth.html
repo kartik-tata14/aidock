@@ -165,6 +165,29 @@
           <p class="auth-toggle-v2">Already have an account? <a href="#" id="showLogin">Log in</a></p>
         </div>
 
+        <!-- OTP Verification step -->
+        <div id="otpView" style="display:none">
+          <div class="otp-header">
+            <div class="otp-icon">✉️</div>
+            <h2>Check your email</h2>
+            <p class="auth-form-sub">We sent a 6-digit code to <strong id="otpEmail"></strong></p>
+          </div>
+          <form id="otpForm" autocomplete="off">
+            <div class="form-group">
+              <label for="otpInput">Verification code</label>
+              <input type="text" id="otpInput" placeholder="Enter 6-digit code" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric" class="otp-input-field" autocomplete="one-time-code">
+            </div>
+            <div id="otpError" class="form-error"></div>
+            <button type="submit" class="btn-primary btn-auth-v2">Verify & Create Account</button>
+          </form>
+          <div class="otp-actions">
+            <span class="otp-timer" id="otpTimer">Resend code in <strong id="otpCountdown">60</strong>s</span>
+            <button class="otp-resend-btn" id="otpResendBtn" style="display:none">Resend Code</button>
+            <span class="otp-divider">·</span>
+            <button class="otp-back-btn" id="otpBackBtn">Change email</button>
+          </div>
+        </div>
+
         <!-- Login form -->
         <div id="loginView" style="display:none">
           <h2>Welcome back</h2>

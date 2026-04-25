@@ -1421,6 +1421,28 @@ a:hover { text-decoration: underline; }
 }
 .auth-toggle-v2 a { color: var(--accent); font-weight: 600; }
 
+/* OTP Verification View */
+.otp-header { text-align: center; margin-bottom: 20px; }
+.otp-icon { font-size: 48px; margin-bottom: 8px; }
+.otp-header h2 { margin-bottom: 4px; }
+.otp-input-field {
+  text-align: center; font-size: 24px; font-weight: 700;
+  letter-spacing: 8px; padding: 14px 16px !important;
+}
+.otp-input-field::placeholder { letter-spacing: 1px; font-size: 14px; font-weight: 400; }
+.otp-actions {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 16px; font-size: 13px;
+}
+.otp-timer { color: var(--text-secondary); }
+.otp-timer strong { color: var(--accent); }
+.otp-resend-btn, .otp-back-btn {
+  background: none; border: none; color: var(--accent); cursor: pointer;
+  font-size: 13px; font-weight: 600; padding: 0; font-family: inherit;
+}
+.otp-resend-btn:hover, .otp-back-btn:hover { text-decoration: underline; }
+.otp-divider { color: var(--text-secondary); opacity: .4; }
+
 /* Invite Page V2 */
 .invite-badge-v2 {
   display: inline-flex; align-items: center; gap: 10px;

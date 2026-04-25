@@ -173,6 +173,29 @@
           </form>
           <p class="auth-toggle-v2">Already have an account? <a href="/auth">Log in</a></p>
         </div>
+
+        <!-- OTP Verification step -->
+        <div id="otpView" style="display:none">
+          <div class="otp-header">
+            <div class="otp-icon">✉️</div>
+            <h2>Check your email</h2>
+            <p class="auth-form-sub">We sent a 6-digit code to <strong id="otpEmail"></strong></p>
+          </div>
+          <form id="otpForm" autocomplete="off">
+            <div class="form-group">
+              <label for="otpInput">Verification code</label>
+              <input type="text" id="otpInput" placeholder="Enter 6-digit code" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric" class="otp-input-field" autocomplete="one-time-code">
+            </div>
+            <div id="otpError" class="form-error"></div>
+            <button type="submit" class="btn-primary btn-auth-v2">Verify & Create Account</button>
+          </form>
+          <div class="otp-actions">
+            <span class="otp-timer" id="otpTimer">Resend code in <strong id="otpCountdown">60</strong>s</span>
+            <button class="otp-resend-btn" id="otpResendBtn" style="display:none">Resend Code</button>
+            <span class="otp-divider">·</span>
+            <button class="otp-back-btn" id="otpBackBtn">Change email</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -235,11 +258,124 @@
       reader.readAsDataURL(file);
     });
 
+    // ===== OTP Verification =====
+    let pendingEmail = '';
+    let otpCountdownInterval = null;
+    const signupViewEl = document.getElementById('signupView');
+    const otpViewEl = document.getElementById('otpView');
+
+    function showOtpView(email) {
+      pendingEmail = email;
+      signupViewEl.style.display = 'none';
+      otpViewEl.style.display = 'block';
+      document.getElementById('otpEmail').textContent = email;
+      document.getElementById('otpInput').value = '';
+      document.getElementById('otpError').textContent = '';
+      document.getElementById('otpInput').focus();
+      startOtpCountdown();
+    }
+
+    function startOtpCountdown() {
+      const timerEl = document.getElementById('otpTimer');
+      const countdownEl = document.getElementById('otpCountdown');
+      const resendBtn = document.getElementById('otpResendBtn');
+      let seconds = 60;
+      timerEl.style.display = '';
+      resendBtn.style.display = 'none';
+      countdownEl.textContent = seconds;
+      clearInterval(otpCountdownInterval);
+      otpCountdownInterval = setInterval(() => {
+        seconds--;
+        countdownEl.textContent = seconds;
+        if (seconds <= 0) {
+          clearInterval(otpCountdownInterval);
+          timerEl.style.display = 'none';
+          resendBtn.style.display = '';
+        }
+      }, 1000);
+    }
+
+    document.getElementById('otpBackBtn').addEventListener('click', () => {
+      clearInterval(otpCountdownInterval);
+      otpViewEl.style.display = 'none';
+      signupViewEl.style.display = 'block';
+    });
+
+    document.getElementById('otpResendBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('otpResendBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      try {
+        const res = await fetch('/api/auth/resend-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: pendingEmail }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById('otpError').textContent = data.error || 'Failed to resend.';
+        } else {
+          startOtpCountdown();
+        }
+      } catch {
+        document.getElementById('otpError').textContent = 'Network error.';
+      }
+      btn.disabled = false;
+      btn.textContent = 'Resend Code';
+    });
+
+    document.getElementById('otpForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('otpError');
+      const btn = e.target.querySelector('button[type="submit"]');
+      const originalText = btn.textContent;
+      errEl.textContent = '';
+      const otp = document.getElementById('otpInput').value.trim();
+      if (!otp || otp.length !== 6) {
+        errEl.textContent = 'Please enter the 6-digit code.';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Verifying…';
+      try {
+        const res = await fetch('/api/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: pendingEmail, otp }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errEl.textContent = data.error || 'Verification failed.';
+          btn.disabled = false;
+          btn.textContent = originalText;
+          return;
+        }
+        if (avatarDataUrl) {
+          btn.textContent = 'Uploading avatar…';
+          await fetch('/api/auth/avatar', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ avatar: avatarDataUrl }),
+          });
+        }
+        btn.textContent = 'Success! Redirecting…';
+        window.location.href = '/dashboard';
+      } catch {
+        errEl.textContent = 'Network error. Please try again.';
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+
     // Signup handler
     document.getElementById('signupForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const errEl = document.getElementById('signupError');
+      const btn = e.target.querySelector('button[type="submit"]');
+      const originalText = btn.textContent;
       errEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Creating account…';
       const name     = document.getElementById('signupName').value.trim();
       const email    = document.getElementById('signupEmail').value.trim();
       const password = document.getElementById('signupPassword').value;
@@ -253,10 +389,24 @@
           body: JSON.stringify({ name, email, password, primary_role, secondary_role, invite_code: inviteCode }),
         });
         const data = await res.json();
-        if (!res.ok) { errEl.textContent = data.error || 'Signup failed.'; return; }
+        if (!res.ok) {
+          errEl.textContent = data.error || 'Signup failed.';
+          btn.disabled = false;
+          btn.textContent = originalText;
+          return;
+        }
 
-        // Upload avatar if selected
+        // OTP flow
+        if (data.pending) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+          showOtpView(data.email);
+          return;
+        }
+
+        // Direct flow (no email verification configured)
         if (avatarDataUrl) {
+          btn.textContent = 'Uploading avatar…';
           await fetch('/api/auth/avatar', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -264,8 +414,13 @@
           });
         }
 
+        btn.textContent = 'Success! Redirecting…';
         window.location.href = '/dashboard';
-      } catch { errEl.textContent = 'Network error. Please try again.'; }
+      } catch {
+        errEl.textContent = 'Network error. Please try again.';
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
     });
   })();
   </script>
