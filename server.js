@@ -191,6 +191,45 @@ const MAX_REFERRALS = 5;
 const SLOTS_PER_REFERRAL = 2;
 const BASE_TOOL_LIMIT = 20;
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_OTP_ATTEMPTS = 5; // Lock out after 5 failed OTP attempts
+const MAX_LOGIN_ATTEMPTS = 8; // Lock out after 8 failed login attempts
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15-minute login lockout
+const MAX_EMAILS_PER_WINDOW = 3; // Max emails per address per window
+const EMAIL_RATE_WINDOW_MS = 15 * 60 * 1000; // 15-minute window
+
+// In-memory email rate limiter (keyed by email address)
+const emailSendLog = {}; // { email: [timestamp, timestamp, ...] }
+function checkEmailRateLimit(email) {
+  const now = Date.now();
+  const log = emailSendLog[email];
+  if (!log) return false; // No emails sent yet — allowed
+  // Remove timestamps outside the window
+  while (log.length > 0 && now - log[0] > EMAIL_RATE_WINDOW_MS) log.shift();
+  if (log.length === 0) { delete emailSendLog[email]; return false; }
+  return log.length >= MAX_EMAILS_PER_WINDOW; // true = blocked
+}
+function recordEmailSent(email) {
+  if (!emailSendLog[email]) emailSendLog[email] = [];
+  emailSendLog[email].push(Date.now());
+}
+
+// In-memory login attempt tracker (keyed by email)
+const loginAttempts = {}; // { email: { count, lockedUntil } }
+function checkLoginLockout(email) {
+  const entry = loginAttempts[email];
+  if (!entry) return false;
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true;
+  if (entry.lockedUntil && Date.now() >= entry.lockedUntil) { delete loginAttempts[email]; return false; }
+  return false;
+}
+function recordLoginFailure(email) {
+  if (!loginAttempts[email]) loginAttempts[email] = { count: 0, lockedUntil: null };
+  loginAttempts[email].count++;
+  if (loginAttempts[email].count >= MAX_LOGIN_ATTEMPTS) {
+    loginAttempts[email].lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+  }
+}
+function clearLoginAttempts(email) { delete loginAttempts[email]; }
 
 // Helper: generate 6-digit OTP
 function generateOTP() {
@@ -303,6 +342,11 @@ app.post('/api/auth/signup', async (req, res) => {
 
     // If email verification is enabled (Resend configured), use OTP flow
     if (resend) {
+      // Rate limit: prevent email flooding
+      if (checkEmailRateLimit(emailNorm)) {
+        return res.status(429).json({ error: 'Too many requests. Please wait a few minutes before trying again.' });
+      }
+
       const otp = generateOTP();
       const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
@@ -321,6 +365,7 @@ app.post('/api/auth/signup', async (req, res) => {
       if (!sent) {
         return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
       }
+      recordEmailSent(emailNorm);
 
       return res.json({ pending: true, email: emailNorm, message: 'Verification code sent to your email.' });
     }
@@ -349,16 +394,30 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     const emailNorm = email.toLowerCase().trim();
     const otpHash = crypto.createHash('sha256').update(otp.toString().trim()).digest('hex');
 
-    const result = await db.execute(
-      "SELECT * FROM email_verifications WHERE email = ? AND otp_hash = ?",
-      [emailNorm, otpHash]
+    // Fetch the pending record first (to check attempts)
+    const pendingResult = await db.execute(
+      "SELECT * FROM email_verifications WHERE email = ?",
+      [emailNorm]
     );
-
-    if (result.rows.length === 0) {
+    if (pendingResult.rows.length === 0) {
       return res.status(400).json({ error: 'Invalid verification code.' });
     }
+    const pending = pendingResult.rows[0];
 
-    const pending = result.rows[0];
+    // Check if locked out from too many attempts
+    if ((pending.attempts || 0) >= MAX_OTP_ATTEMPTS) {
+      await db.execute("DELETE FROM email_verifications WHERE email = ?", [emailNorm]);
+      db.saveToFile();
+      return res.status(429).json({ error: 'Too many failed attempts. Please sign up again.' });
+    }
+
+    // Verify the OTP hash
+    if (pending.otp_hash !== otpHash) {
+      await db.execute("UPDATE email_verifications SET attempts = COALESCE(attempts, 0) + 1 WHERE email = ?", [emailNorm]);
+      db.saveToFile();
+      const remaining = MAX_OTP_ATTEMPTS - (pending.attempts || 0) - 1;
+      return res.status(400).json({ error: remaining > 0 ? `Invalid code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` : 'Too many failed attempts. Please sign up again.' });
+    }
 
     // Check expiry
     if (new Date(pending.expires_at) < new Date()) {
@@ -405,6 +464,12 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email is required.' });
 
     const emailNorm = email.toLowerCase().trim();
+
+    // Rate limit: prevent email flooding
+    if (checkEmailRateLimit(emailNorm)) {
+      return res.status(429).json({ error: 'Too many requests. Please wait a few minutes before trying again.' });
+    }
+
     const pending = await db.execute("SELECT name FROM email_verifications WHERE email = ?", [emailNorm]);
     if (pending.rows.length === 0) {
       return res.status(404).json({ error: 'No pending verification found. Please sign up again.' });
@@ -414,7 +479,7 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
 
-    await db.execute("UPDATE email_verifications SET otp_hash = ?, expires_at = ? WHERE email = ?",
+    await db.execute("UPDATE email_verifications SET otp_hash = ?, expires_at = ?, attempts = 0 WHERE email = ?",
       [otpHash, expiresAt, emailNorm]);
     db.saveToFile();
 
@@ -422,6 +487,7 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     if (!sent) {
       return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
     }
+    recordEmailSent(emailNorm);
 
     res.json({ ok: true, message: 'New verification code sent.' });
   } catch (err) {
@@ -435,14 +501,24 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
-    const result = await db.execute("SELECT id, name, email, password_hash FROM users WHERE email = ?", [email.toLowerCase().trim()]);
+    const emailNorm = email.toLowerCase().trim();
+
+    // Check login lockout
+    if (checkLoginLockout(emailNorm)) {
+      return res.status(429).json({ error: 'Too many failed attempts. Please try again in 15 minutes.' });
+    }
+
+    const result = await db.execute("SELECT id, name, email, password_hash FROM users WHERE email = ?", [emailNorm]);
     if (result.rows.length === 0) {
+      recordLoginFailure(emailNorm);
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
     const row = result.rows[0];
     if (!(await bcrypt.compare(password, row.password_hash))) {
+      recordLoginFailure(emailNorm);
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
+    clearLoginAttempts(emailNorm);
 
     const user = { id: row.id, name: row.name, email: row.email };
     const token = generateToken(user);
@@ -471,6 +547,9 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     if (!resend) return res.json({ ok: true });
 
+    // Rate limit: prevent email flooding (return ok to avoid enumeration)
+    if (checkEmailRateLimit(email)) return res.json({ ok: true });
+
     const otp = generateOTP();
     const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -483,6 +562,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     );
 
     await sendResetEmail(email, otp, user.rows[0].name);
+    recordEmailSent(email);
     res.json({ ok: true });
   } catch (err) {
     console.error('Forgot password error:', err);
@@ -496,6 +576,11 @@ app.post('/api/auth/resend-reset-otp', async (req, res) => {
     const email = (req.body.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ error: 'Email is required.' });
 
+    // Rate limit: prevent email flooding
+    if (checkEmailRateLimit(email)) {
+      return res.status(429).json({ error: 'Too many requests. Please wait a few minutes before trying again.' });
+    }
+
     const pending = await db.execute("SELECT email FROM password_resets WHERE email = ?", [email]);
     if (pending.rows.length === 0) return res.status(400).json({ error: 'No pending reset found. Please start over.' });
 
@@ -506,10 +591,11 @@ app.post('/api/auth/resend-reset-otp', async (req, res) => {
     const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    await db.execute("UPDATE password_resets SET otp_hash = ?, expires_at = ? WHERE email = ?",
+    await db.execute("UPDATE password_resets SET otp_hash = ?, expires_at = ?, attempts = 0 WHERE email = ?",
       [otpHash, expiresAt, email]);
 
     await sendResetEmail(email, otp, user.rows[0].name);
+    recordEmailSent(email);
     res.json({ ok: true });
   } catch (err) {
     console.error('Resend reset OTP error:', err);
@@ -529,15 +615,33 @@ app.post('/api/auth/reset-password', async (req, res) => {
     if (newPassword.length > 128) return res.status(400).json({ error: 'Password too long.' });
 
     const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+    // Fetch the reset record first (to check attempts)
     const record = await db.execute(
-      "SELECT * FROM password_resets WHERE email = ? AND otp_hash = ?",
-      [email, otpHash]
+      "SELECT * FROM password_resets WHERE email = ?",
+      [email]
     );
 
     if (record.rows.length === 0) return res.status(400).json({ error: 'Invalid or expired code.' });
-    if (new Date(record.rows[0].expires_at) < new Date()) {
+
+    const resetRow = record.rows[0];
+
+    // Check if locked out from too many attempts
+    if ((resetRow.attempts || 0) >= MAX_OTP_ATTEMPTS) {
+      await db.execute("DELETE FROM password_resets WHERE email = ?", [email]);
+      return res.status(429).json({ error: 'Too many failed attempts. Please request a new code.' });
+    }
+
+    if (new Date(resetRow.expires_at) < new Date()) {
       await db.execute("DELETE FROM password_resets WHERE email = ?", [email]);
       return res.status(400).json({ error: 'Code has expired. Please request a new one.' });
+    }
+
+    // Verify the OTP hash
+    if (resetRow.otp_hash !== otpHash) {
+      await db.execute("UPDATE password_resets SET attempts = COALESCE(attempts, 0) + 1 WHERE email = ?", [email]);
+      const remaining = MAX_OTP_ATTEMPTS - (resetRow.attempts || 0) - 1;
+      return res.status(400).json({ error: remaining > 0 ? `Invalid code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` : 'Too many failed attempts. Please request a new code.' });
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -2037,6 +2141,7 @@ async function initSchema() {
     created_at DATETIME DEFAULT (datetime('now'))
   )`);
   try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ev_email ON email_verifications(email)"); } catch {}
+  try { await db.execute("ALTER TABLE email_verifications ADD COLUMN attempts INTEGER DEFAULT 0"); } catch {}
   
   // Clean up expired pending verifications (older than 1 hour)
   try { await db.execute("DELETE FROM email_verifications WHERE expires_at < datetime('now', '-1 hour')"); } catch {}
@@ -2050,6 +2155,7 @@ async function initSchema() {
     created_at DATETIME DEFAULT (datetime('now'))
   )`);
   try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pr_email ON password_resets(email)"); } catch {}
+  try { await db.execute("ALTER TABLE password_resets ADD COLUMN attempts INTEGER DEFAULT 0"); } catch {}
   try { await db.execute("DELETE FROM password_resets WHERE expires_at < datetime('now', '-1 hour')"); } catch {}
   
   // Backfill invite codes
