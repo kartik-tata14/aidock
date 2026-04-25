@@ -208,7 +208,7 @@ async function sendOTPEmail(email, otp, name) {
       html: `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
           <div style="text-align:center;margin-bottom:24px">
-            <span style="font-size:28px;font-weight:800;color:#f97316">⬡ AIDock</span>
+            <span style="font-size:28px;font-weight:800;color:#0a84ff">⬡ AIDock</span>
           </div>
           <p style="font-size:15px;color:#333;margin-bottom:4px">Hi ${name},</p>
           <p style="font-size:15px;color:#333;margin-bottom:24px">Enter this code to verify your email and complete your signup:</p>
