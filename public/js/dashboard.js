@@ -2004,70 +2004,74 @@
   const followSearchResult = $('#followSearchResult');
 
   async function searchAndFollow() {
-    const email = followSearchInput.value.trim();
-    if (!email) return;
+    const query = followSearchInput.value.trim();
+    if (!query) return;
     
     followSearchBtn.disabled = true;
     followSearchBtn.textContent = 'Searching...';
     followSearchResult.style.display = 'none';
     
     try {
-      const data = await api('/api/users/search?email=' + encodeURIComponent(email));
-      const user = data.user;
+      const data = await api('/api/users/search?q=' + encodeURIComponent(query));
+      const users = data.users || (data.user ? [data.user] : []);
       
-      const initials = user.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-      const avatarStyle = user.avatar
-        ? `background-image:url(${user.avatar});background-size:cover;background-position:center;color:transparent`
-        : '';
-      const roles = [user.primary_role, user.secondary_role].filter(Boolean).join(' · ') || 'No role set';
-      
-      followSearchResult.innerHTML = `
-        <div class="follow-result-user">
+      if (users.length === 0) {
+        followSearchResult.innerHTML = `<p class="follow-result-error">No users found.</p>`;
+        followSearchResult.style.display = '';
+        return;
+      }
+
+      followSearchResult.innerHTML = users.map(user => {
+        const initials = (user.name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        const avatarStyle = user.avatar
+          ? `background-image:url(${user.avatar});background-size:cover;background-position:center;color:transparent`
+          : '';
+        const roles = [user.primary_role, user.secondary_role].filter(Boolean).join(' · ') || 'No role set';
+        const btnHtml = user.is_following
+          ? `<button class="follow-btn follow-btn-following" data-user-id="${user.id}">Following ✓</button>`
+          : `<button class="follow-btn follow-btn-follow" data-user-id="${user.id}">Follow</button>`;
+
+        return `<div class="follow-result-user">
           <div class="follow-result-avatar" style="${avatarStyle}">${user.avatar ? '' : initials}</div>
           <div class="follow-result-info">
             <div class="follow-result-name">${esc(user.name)}</div>
             <div class="follow-result-role">${esc(roles)}</div>
           </div>
-          <div class="follow-result-actions">
-            ${user.is_following 
-              ? `<button class="follow-btn follow-btn-following" data-user-id="${user.id}">Following ✓</button>`
-              : `<button class="follow-btn follow-btn-follow" data-user-id="${user.id}">Follow</button>`
-            }
-          </div>
-        </div>
-      `;
+          <div class="follow-result-actions">${btnHtml}</div>
+        </div>`;
+      }).join('');
       followSearchResult.style.display = '';
       
-      // Bind follow/unfollow click
-      const followBtn = followSearchResult.querySelector('.follow-btn');
-      followBtn.addEventListener('click', async () => {
-        const userId = Number(followBtn.dataset.userId);
-        const isCurrentlyFollowing = followBtn.classList.contains('follow-btn-following');
-        
-        followBtn.disabled = true;
-        followBtn.textContent = isCurrentlyFollowing ? 'Unfollowing...' : 'Following...';
-        
-        try {
-          if (isCurrentlyFollowing) {
-            await api('/api/follows/' + userId, { method: 'DELETE' });
-            followBtn.className = 'follow-btn follow-btn-follow';
-            followBtn.textContent = 'Follow';
-          } else {
-            await api('/api/follows', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
-            followBtn.className = 'follow-btn follow-btn-following';
-            followBtn.textContent = 'Following ✓';
+      // Bind follow/unfollow clicks via delegation
+      followSearchResult.querySelectorAll('.follow-btn').forEach(followBtn => {
+        followBtn.addEventListener('click', async () => {
+          const userId = Number(followBtn.dataset.userId);
+          const isCurrentlyFollowing = followBtn.classList.contains('follow-btn-following');
+          
+          followBtn.disabled = true;
+          followBtn.textContent = isCurrentlyFollowing ? 'Unfollowing...' : 'Following...';
+          
+          try {
+            if (isCurrentlyFollowing) {
+              await api('/api/follows/' + userId, { method: 'DELETE' });
+              followBtn.className = 'follow-btn follow-btn-follow';
+              followBtn.textContent = 'Follow';
+            } else {
+              await api('/api/follows', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+              followBtn.className = 'follow-btn follow-btn-following';
+              followBtn.textContent = 'Following ✓';
+            }
+            await loadFriends();
+          } catch (err) {
+            showToast(err.message || 'Operation failed.', 'error');
+            followBtn.textContent = isCurrentlyFollowing ? 'Following ✓' : 'Follow';
           }
-          // Refresh friends list
-          await loadFriends();
-        } catch (err) {
-          alert(err.message || 'Operation failed.');
-          followBtn.textContent = isCurrentlyFollowing ? 'Following ✓' : 'Follow';
-        }
-        followBtn.disabled = false;
+          followBtn.disabled = false;
+        });
       });
       
     } catch (err) {
-      followSearchResult.innerHTML = `<p class="follow-result-error">${esc(err.message || 'User not found.')}</p>`;
+      followSearchResult.innerHTML = `<p class="follow-result-error">${esc(err.message || 'No users found.')}</p>`;
       followSearchResult.style.display = '';
     }
     

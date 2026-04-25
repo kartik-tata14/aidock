@@ -1367,40 +1367,60 @@ app.get('/api/friends/:id/profile', authMiddleware, async (req, res) => {
 // Search for a user by email (to follow them)
 app.get('/api/users/search', authMiddleware, async (req, res) => {
   try {
-    const email = (req.query.email || '').toLowerCase().trim();
-    if (!email) return res.status(400).json({ error: 'Email is required.' });
+    const query = (req.query.q || req.query.email || '').trim();
+    if (!query) return res.status(400).json({ error: 'Search query is required.' });
+    if (query.length < 2) return res.status(400).json({ error: 'Please enter at least 2 characters.' });
     
-    // Don't allow searching for yourself
-    if (email === req.user.email.toLowerCase()) {
-      return res.status(400).json({ error: 'You cannot search for yourself.' });
-    }
-    
-    const result = await db.execute("SELECT id, name, primary_role, secondary_role, avatar FROM users WHERE LOWER(email) = ?", [email]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No user found with this email.' });
-    }
-    
-    const row = result.rows[0];
-    
-    // Check if already following
-    const followCheck = await db.execute("SELECT id FROM follows WHERE follower_id = ? AND followed_id = ?", [req.user.id, row.id]);
-    const isFollowing = followCheck.rows.length > 0;
-    
-    // Check if connected via referral
-    const visibleIds = await getVisibleUserIds(req.user.id);
-    const isConnected = visibleIds.has(row.id);
-    
-    res.json({
-      user: {
-        id: row.id,
-        name: row.name || '',
-        primary_role: row.primary_role || '',
-        secondary_role: row.secondary_role || '',
-        avatar: row.avatar || '',
-        is_following: isFollowing,
-        is_connected: isConnected
+    const myEmail = req.user.email.toLowerCase();
+    const myId = req.user.id;
+    let rows;
+
+    // If it looks like an email, do exact email match; otherwise search by name
+    const isEmail = query.includes('@');
+    if (isEmail) {
+      const email = query.toLowerCase();
+      if (email === myEmail) {
+        return res.status(400).json({ error: 'You cannot search for yourself.' });
       }
-    });
+      const result = await db.execute(
+        "SELECT id, name, email, primary_role, secondary_role, avatar FROM users WHERE LOWER(email) = ?",
+        [email]
+      );
+      rows = result.rows;
+    } else {
+      const result = await db.execute(
+        "SELECT id, name, email, primary_role, secondary_role, avatar FROM users WHERE LOWER(name) LIKE ? ORDER BY name LIMIT 20",
+        ['%' + query.toLowerCase() + '%']
+      );
+      // Filter out self
+      rows = result.rows.filter(r => r.id !== myId);
+    }
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: isEmail ? 'No user found with this email.' : 'No users found matching that name.' });
+    }
+
+    // Get follow status for all results in one query
+    const followResult = await db.execute("SELECT followed_id FROM follows WHERE follower_id = ?", [myId]);
+    const followingSet = new Set(followResult.rows.map(r => r.followed_id));
+
+    const visibleIds = await getVisibleUserIds(myId);
+
+    const users = rows.map(row => ({
+      id: row.id,
+      name: row.name || '',
+      primary_role: row.primary_role || '',
+      secondary_role: row.secondary_role || '',
+      avatar: row.avatar || '',
+      is_following: followingSet.has(row.id),
+      is_connected: visibleIds.has(row.id)
+    }));
+
+    // Keep backward compatibility: if single result from email search, return as { user }
+    if (isEmail && users.length === 1) {
+      return res.json({ user: users[0], users });
+    }
+    res.json({ users });
   } catch (err) {
     console.error('User search error:', err);
     res.status(500).json({ error: 'Search failed.' });

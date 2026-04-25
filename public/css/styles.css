@@ -3045,10 +3045,16 @@ a:hover { text-decoration: underline; }
   margin-top: 12px; padding: 14px;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 12px;
+  max-height: 320px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
 }
 .follow-result-user {
   display: flex; align-items: center; gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
 }
+.follow-result-user:last-child { border-bottom: none; padding-bottom: 0; }
+.follow-result-user:first-child { padding-top: 0; }
 .follow-result-avatar {
   width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
   background: linear-gradient(135deg, #5e5ce6, #0a84ff);
