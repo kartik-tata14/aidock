@@ -81,15 +81,11 @@
         if (sidebarMyView) sidebarMyView.style.display = 'none';
         if (sidebarSocialView) sidebarSocialView.style.display = '';
         
-        // Load friends if not cached
-        if (typeof loadFriends === 'function') {
-          await loadFriends();
-        }
-        
-        // Load community trending
-        if (typeof initCommunity === 'function') {
-          await initCommunity();
-        }
+        // Load friends and community data in parallel
+        await Promise.all([
+          typeof loadFriends === 'function' ? loadFriends() : Promise.resolve(),
+          typeof initCommunity === 'function' ? initCommunity() : Promise.resolve()
+        ]);
         
         // Handle friend profile page
         if (route.page === 'friend' && route.friendId) {
@@ -670,7 +666,7 @@
         </div>` : '';
 
       return `
-        <div class="card${isLocked ? ' card-locked' : ''}" style="animation-delay:${i * 40}ms" data-id="${t.id}" ${isLocked ? '' : 'draggable="true"'}>
+        <div class="card${isLocked ? ' card-locked' : ''}" style="${i < 20 ? `animation-delay:${i * 30}ms` : ''}" data-id="${t.id}" ${isLocked ? '' : 'draggable="true"'}>
           ${lockedOverlay}
           <div class="card-header">
             <div class="card-avatar-wrap">
@@ -725,10 +721,11 @@
   // Alias: render() calls renderFull() for backward compat (data-change call sites)
   const render = renderFull;
 
+  // Fast HTML escaping without creating DOM elements each time
+  const _escDiv = document.createElement('div');
   function esc(str) {
-    const d = document.createElement('div');
-    d.textContent = str || '';
-    return d.innerHTML;
+    _escDiv.textContent = str || '';
+    return _escDiv.innerHTML;
   }
 
   /* ===== Modal ===== */
@@ -1933,9 +1930,11 @@
 
   // Load trending when social view is first shown
   async function initCommunity() {
-    await loadCommunityFilters();
     if (!trendingLoaded) {
-      await loadTrendingTools('', '');
+      await Promise.all([
+        loadCommunityFilters(),
+        loadTrendingTools('', '')
+      ]);
       trendingLoaded = true;
     }
   }

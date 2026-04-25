@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
@@ -126,6 +127,7 @@ async function getLastInsertId() {
 }
 
 // ===== Middleware =====
+app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 
@@ -189,7 +191,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     const newInviteCode = crypto.randomBytes(6).toString('hex');
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = await bcrypt.hash(password, 10);
 
     let referrerId = null;
     if (invite_code && typeof invite_code === 'string' && invite_code.trim()) {
@@ -236,7 +238,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
     const row = result.rows[0];
-    if (!bcrypt.compareSync(password, row.password_hash)) {
+    if (!(await bcrypt.compare(password, row.password_hash))) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
@@ -257,9 +259,11 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    const result = await db.execute("SELECT primary_role, secondary_role, invite_code, tool_limit, avatar, is_pro, subscription_type, subscription_expiry FROM users WHERE id = ?", [req.user.id]);
+    const [result, refResult] = await Promise.all([
+      db.execute("SELECT primary_role, secondary_role, invite_code, tool_limit, avatar, is_pro, subscription_type, subscription_expiry FROM users WHERE id = ?", [req.user.id]),
+      db.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", [req.user.id])
+    ]);
     const row = result.rows[0] || {};
-    const refResult = await db.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", [req.user.id]);
     const referral_count = refResult.rows[0].cnt || 0;
     
     // Check if subscription has expired
@@ -573,6 +577,15 @@ app.post('/api/tools/import', authMiddleware, async (req, res) => {
     let skippedDuplicate = 0;
     let skippedLimit = 0;
 
+    // Pre-load all existing user tools for duplicate detection (avoids N+1)
+    const existingTools = await db.execute("SELECT id, LOWER(name) as name_lower, LOWER(url) as url_lower FROM tools WHERE user_id = ?", [req.user.id]);
+    const existingByName = new Set();
+    const existingByUrl = new Set();
+    for (const et of existingTools.rows) {
+      existingByName.add(et.name_lower);
+      if (et.url_lower) existingByUrl.add(et.url_lower);
+    }
+
     for (const t of toolsList) {
       if (!t.name) continue;
 
@@ -584,16 +597,18 @@ app.post('/api/tools/import', authMiddleware, async (req, res) => {
 
       const nameNorm = t.name.trim().toLowerCase();
       const urlNorm = (t.url || '').trim().toLowerCase();
-      const existing = await db.execute(
-        "SELECT id FROM tools WHERE user_id = ? AND (LOWER(name) = ? OR (url != '' AND LOWER(url) = ?))",
-        [req.user.id, nameNorm, urlNorm]
-      );
-      if (existing.rows.length > 0) { skippedDuplicate++; continue; }
+      if (existingByName.has(nameNorm) || (urlNorm && existingByUrl.has(urlNorm))) {
+        skippedDuplicate++;
+        continue;
+      }
 
       await db.execute("INSERT INTO tools (user_id, name, url, category, pricing, description, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [req.user.id, t.name.trim(), t.url || '', t.category || 'Other', t.pricing || 'Unknown', t.description || '', t.notes || '']);
       count++;
       currentToolCount++;
+      // Update local caches for subsequent iterations
+      existingByName.add(nameNorm);
+      if (urlNorm) existingByUrl.add(urlNorm);
     }
     db.saveToFile();
     res.json({ imported: count, skipped: skippedDuplicate, skippedLimit });
@@ -604,13 +619,22 @@ app.post('/api/tools/import', authMiddleware, async (req, res) => {
 });
 
 // ===== Proxy for description fetching =====
+const descriptionCache = {};
+const DESC_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 app.get('/api/fetch-description', authMiddleware, async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).json({ error: 'URL is required.' });
 
+  // Check cache first
+  const cached = descriptionCache[targetUrl];
+  if (cached && Date.now() - cached.ts < DESC_CACHE_TTL) {
+    return res.json(cached.data);
+  }
+
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 8000);
     const resp = await fetch(targetUrl, {
       signal: controller.signal,
       redirect: 'follow',
@@ -913,7 +937,9 @@ app.get('/api/fetch-description', authMiddleware, async (req, res) => {
       }
     }
 
-    res.json({ description: desc, suggestedCategory: suggestedCategory || 'Other' });
+    const responseData = { description: desc, suggestedCategory: suggestedCategory || 'Other' };
+    descriptionCache[targetUrl] = { data: responseData, ts: Date.now() };
+    res.json(responseData);
   } catch (err) {
     console.error('fetch-description error:', err.message);
     res.status(502).json({ error: 'Failed to fetch description: ' + (err.message || 'Unknown error') });
@@ -1138,18 +1164,32 @@ app.post('/api/stacks/clone/:slug', authMiddleware, async (req, res) => {
     let skipped = 0;
 
     const tr = await db.execute("SELECT t.name, t.url, t.category, t.pricing, t.description, t.notes, st.description AS st_desc, st.notes AS st_notes FROM tools t JOIN stack_tools st ON t.id = st.tool_id WHERE st.stack_id = ? ORDER BY st.sort_order, st.added_at", [src.id]);
+    
+    // Pre-load all existing user tools for duplicate detection (avoids N+1)
+    const existingTools = await db.execute("SELECT id, LOWER(name) as name_lower, LOWER(url) as url_lower FROM tools WHERE user_id = ?", [req.user.id]);
+    const existingByName = {};
+    const existingByUrl = {};
+    for (const et of existingTools.rows) {
+      existingByName[et.name_lower] = et.id;
+      if (et.url_lower) existingByUrl[et.url_lower] = et.id;
+    }
+
     for (const r of tr.rows) {
-      const existing = await db.execute("SELECT id FROM tools WHERE user_id = ? AND (LOWER(name) = ? OR (url != '' AND LOWER(url) = ?))",
-        [req.user.id, r.name.toLowerCase(), (r.url || '').toLowerCase()]);
+      const nameLower = r.name.toLowerCase();
+      const urlLower = (r.url || '').toLowerCase();
+      const existingId = existingByName[nameLower] || (urlLower ? existingByUrl[urlLower] : null);
       let toolId;
-      if (existing.rows.length > 0) {
-        toolId = existing.rows[0].id;
+      if (existingId) {
+        toolId = existingId;
       } else {
         if (currentToolCount >= userToolLimit) { skipped++; continue; }
         await db.execute("INSERT INTO tools (user_id, name, url, category, pricing, description, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
           [req.user.id, r.name, r.url || '', r.category || 'Other', r.pricing || 'Unknown', r.description || '', r.notes || '']);
         toolId = await getLastInsertId();
         currentToolCount++;
+        // Update local cache for subsequent iterations
+        existingByName[nameLower] = toolId;
+        if (urlLower) existingByUrl[urlLower] = toolId;
       }
       try { await db.execute("INSERT INTO stack_tools (stack_id, tool_id, description, notes) VALUES (?, ?, ?, ?)", [newId, toolId, r.st_desc || '', r.st_notes || '']); } catch {}
     }
@@ -1592,7 +1632,7 @@ async function initSchema() {
     created_at DATETIME DEFAULT (datetime('now'))
   )`);
   
-  // Add columns if missing (migrations)
+  // Add columns if missing (migrations) — all independent, run in parallel
   const migrations = [
     "ALTER TABLE users ADD COLUMN primary_role TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN secondary_role TEXT DEFAULT ''",
@@ -1607,9 +1647,7 @@ async function initSchema() {
     "ALTER TABLE users ADD COLUMN razorpay_payment_id TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN razorpay_order_id TEXT DEFAULT ''"
   ];
-  for (const sql of migrations) {
-    try { await db.execute(sql); } catch {}
-  }
+  await Promise.allSettled(migrations.map(sql => db.execute(sql)));
   
   try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_invite_code ON users(invite_code)"); } catch {}
   
@@ -1691,9 +1729,7 @@ async function initSchema() {
     "ALTER TABLE stacks ADD COLUMN views INTEGER DEFAULT 0",
     "ALTER TABLE stacks ADD COLUMN clones INTEGER DEFAULT 0"
   ];
-  for (const sql of stackMigrations) {
-    try { await db.execute(sql); } catch {}
-  }
+  await Promise.allSettled(stackMigrations.map(sql => db.execute(sql)));
   try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stacks_slug ON stacks(share_slug)"); } catch {}
   
   // Stack tools junction table
@@ -1714,18 +1750,18 @@ async function initSchema() {
     "ALTER TABLE stack_tools ADD COLUMN description TEXT DEFAULT ''",
     "ALTER TABLE stack_tools ADD COLUMN notes TEXT DEFAULT ''"
   ];
-  for (const sql of stackToolMigrations) {
-    try { await db.execute(sql); } catch {}
-  }
+  await Promise.allSettled(stackToolMigrations.map(sql => db.execute(sql)));
   
-  // Indexes
-  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_tools_user ON tools(user_id)"); } catch {}
-  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_stacks_user ON stacks(user_id)"); } catch {}
-  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_stack_tools_stack ON stack_tools(stack_id)"); } catch {}
-  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_stack_tools_tool ON stack_tools(tool_id)"); } catch {}
-  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_stacks_share_slug ON stacks(share_slug)"); } catch {}
-  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)"); } catch {}
-  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)"); } catch {}
+  // Indexes — all independent, run in parallel
+  await Promise.allSettled([
+    db.execute("CREATE INDEX IF NOT EXISTS idx_tools_user ON tools(user_id)"),
+    db.execute("CREATE INDEX IF NOT EXISTS idx_stacks_user ON stacks(user_id)"),
+    db.execute("CREATE INDEX IF NOT EXISTS idx_stack_tools_stack ON stack_tools(stack_id)"),
+    db.execute("CREATE INDEX IF NOT EXISTS idx_stack_tools_tool ON stack_tools(tool_id)"),
+    db.execute("CREATE INDEX IF NOT EXISTS idx_stacks_share_slug ON stacks(share_slug)"),
+    db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)"),
+    db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
+  ]);
   
   db.saveToFile();
 }
