@@ -230,9 +230,12 @@
     updateAvatar();
     updateProUI(); // Update sidebar for Pro users
     updateRenewalBanner(); // Check subscription expiry
-    await loadTools();
+    const [, stacksErr] = await Promise.all([
+      loadTools(),
+      loadStacks().then(() => null).catch(e => e)
+    ]);
+    if (stacksErr) console.warn('Stacks load failed:', stacksErr);
     updateUpgradeBanner(); // Nudge free users to upgrade (after tools loaded)
-    try { await loadStacks(); } catch (e) { console.warn('Stacks load failed:', e); }
     render();
     // Initialize router after UI is ready
     router.handleRoute();
@@ -617,11 +620,17 @@
     return new Set(locked.map(t => t.id));
   }
 
-  function render() {
+  // Full render: rebuilds everything (call when tools/stacks data changes)
+  function renderFull() {
     renderCategoryFilters();
     updateGreeting();
     renderStacks();
     updateTierCounter();
+    renderCards();
+  }
+
+  // Lightweight render: only re-filters and re-renders cards (for search/filter changes)
+  function renderCards() {
     const lockedIds = getLockedToolIds();
     const filtered = tools.filter(t => {
       if (activeCategory !== 'All' && t.category !== activeCategory) return false;
@@ -646,7 +655,7 @@
       const descHtml = t.description ? `<div class="card-desc">${esc(t.description)}</div>` : '';
       const domain = t.url ? t.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : '';
       const faviconHtml = domain
-        ? `<img class="card-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        ? `<img class="card-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
         : '';
       const fallbackAvatar = `<div class="card-avatar-fallback ${catClass}" ${domain ? 'style="display:none"' : ''}>${esc(initials)}</div>`;
 
@@ -712,6 +721,9 @@
       }
     }
   }
+
+  // Alias: render() calls renderFull() for backward compat (data-change call sites)
+  const render = renderFull;
 
   function esc(str) {
     const d = document.createElement('div');
@@ -1105,7 +1117,12 @@
     if (delBtn) openDelete(Number(delBtn.dataset.delete));
   });
 
-  searchInput.addEventListener('input', (e) => { searchQuery = e.target.value; render(); });
+  let _searchTimer;
+  searchInput.addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(renderCards, 150);
+  });
 
   // Accordion toggles
   document.querySelectorAll('.sidebar-accordion').forEach(btn => {
@@ -1120,7 +1137,8 @@
     const item = e.target.closest('.sidebar-item');
     if (!item) return;
     activeCategory = item.dataset.filter;
-    render();
+    renderCategoryFilters();
+    renderCards();
   });
 
   pricingFiltersEl.addEventListener('click', (e) => {
@@ -1129,7 +1147,7 @@
     pricingFiltersEl.querySelectorAll('.sidebar-item').forEach(c => c.classList.remove('active'));
     item.classList.add('active');
     activePricing = item.dataset.pricing;
-    render();
+    renderCards();
   });
 
   document.addEventListener('keydown', (e) => {
@@ -1165,7 +1183,7 @@
         faviconsHtml = previews.map(t => {
           const domain = t.url ? t.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : '';
           if (domain) {
-            return `<img class="sf-icon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="">`;
+            return `<img class="sf-icon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="" loading="lazy">`;
           }
           return `<span class="sf-icon" style="display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent)">${esc(t.name.slice(0,1))}</span>`;
         }).join('');
@@ -1313,7 +1331,7 @@
     folderGrid.innerHTML = stackTools.map(t => {
       const domain = t.url ? t.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : '';
       const faviconHtml = domain
-        ? `<img class="folder-tool-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        ? `<img class="folder-tool-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
         : '';
       const fallback = `<div class="folder-tool-fallback" ${domain ? 'style="display:none"' : ''}>${esc(t.name.slice(0,2))}</div>`;
       const linkHtml = t.url ? `<a class="folder-tool-link" href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>` : '';
@@ -1546,12 +1564,16 @@
     }
   }
 
+  let _floatingDragItem = null;
   floatingDock.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     const item = e.target.closest('.floating-dock-stack');
-    floatingDock.querySelectorAll('.floating-dock-stack.drag-over').forEach(el => el.classList.remove('drag-over'));
-    if (item) item.classList.add('drag-over');
+    if (item !== _floatingDragItem) {
+      if (_floatingDragItem) _floatingDragItem.classList.remove('drag-over');
+      _floatingDragItem = item;
+      if (item) item.classList.add('drag-over');
+    }
   });
   floatingDock.addEventListener('dragleave', (e) => {
     const item = e.target.closest('.floating-dock-stack');
@@ -1590,18 +1612,23 @@
   cardsGrid.addEventListener('dragend', (e) => {
     const card = e.target.closest('.card');
     if (card) card.classList.remove('dragging');
-    document.querySelectorAll('.stack-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    if (_stackDragItem) { _stackDragItem.classList.remove('drag-over'); _stackDragItem = null; }
+    if (_floatingDragItem) { _floatingDragItem.classList.remove('drag-over'); _floatingDragItem = null; }
     stacksDock.classList.remove('drag-active');
     floatingDock.classList.remove('visible');
   });
 
   // Stack dock: drag over & drop
+  let _stackDragItem = null;
   stacksDock.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     const item = e.target.closest('.stack-item');
-    document.querySelectorAll('.stack-item.drag-over').forEach(el => el.classList.remove('drag-over'));
-    if (item) item.classList.add('drag-over');
+    if (item !== _stackDragItem) {
+      if (_stackDragItem) _stackDragItem.classList.remove('drag-over');
+      _stackDragItem = item;
+      if (item) item.classList.add('drag-over');
+    }
   });
   stacksDock.addEventListener('dragleave', (e) => {
     const item = e.target.closest('.stack-item');
@@ -1979,14 +2006,16 @@
         </div>`;
     }).join('');
 
-    // Click handler for friend cards
-    grid.querySelectorAll('.friend-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const fid = Number(card.dataset.friendId);
-        router.navigate('/dashboard/social/friend/' + fid);
-      });
-    });
   }
+
+  // Event delegation for friend cards (attached once, not per render)
+  $('#friendsGrid').addEventListener('click', (e) => {
+    const card = e.target.closest('.friend-card');
+    if (card) {
+      const fid = Number(card.dataset.friendId);
+      router.navigate('/dashboard/social/friend/' + fid);
+    }
+  });
 
   /* ===== Follow Search ===== */
   const followSearchInput = $('#followSearchInput');

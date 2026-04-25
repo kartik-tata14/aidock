@@ -929,12 +929,22 @@ app.get('/api/stacks', authMiddleware, async (req, res) => {
   try {
     const result = await db.execute("SELECT id, user_id, name, description, color, icon, created_at, views, clones, share_slug FROM stacks WHERE user_id = ? ORDER BY created_at DESC", [req.user.id]);
     const stacks = result.rows.map(rowToStack);
-    for (const s of stacks) {
-      const tr = await db.execute("SELECT tool_id, description, notes FROM stack_tools WHERE stack_id = ? ORDER BY sort_order, added_at", [s.id]);
-      s.tool_ids = tr.rows.map(r => r.tool_id);
-      s.stack_tool_meta = {};
+    if (stacks.length > 0) {
+      const stackIds = stacks.map(s => s.id);
+      const placeholders = stackIds.map(() => '?').join(',');
+      const tr = await db.execute(`SELECT stack_id, tool_id, description, notes FROM stack_tools WHERE stack_id IN (${placeholders}) ORDER BY sort_order, added_at`, stackIds);
+      const byStack = {};
       for (const r of tr.rows) {
-        s.stack_tool_meta[r.tool_id] = { description: r.description || '', notes: r.notes || '' };
+        if (!byStack[r.stack_id]) byStack[r.stack_id] = [];
+        byStack[r.stack_id].push(r);
+      }
+      for (const s of stacks) {
+        const rows = byStack[s.id] || [];
+        s.tool_ids = rows.map(r => r.tool_id);
+        s.stack_tool_meta = {};
+        for (const r of rows) {
+          s.stack_tool_meta[r.tool_id] = { description: r.description || '', notes: r.notes || '' };
+        }
       }
     }
     res.json({ stacks });
@@ -1284,16 +1294,15 @@ app.get('/api/community/filters', authMiddleware, async (req, res) => {
 async function getVisibleUserIds(userId) {
   const visibleIds = new Set();
   
-  // People I referred
-  const referred = await db.execute("SELECT referred_id FROM referrals WHERE referrer_id = ?", [userId]);
+  // Parallelize all three lookups
+  const [referred, me, following] = await Promise.all([
+    db.execute("SELECT referred_id FROM referrals WHERE referrer_id = ?", [userId]),
+    db.execute("SELECT referred_by FROM users WHERE id = ?", [userId]),
+    db.execute("SELECT followed_id FROM follows WHERE follower_id = ?", [userId])
+  ]);
+  
   referred.rows.forEach(r => visibleIds.add(r.referred_id));
-  
-  // Person who referred me
-  const me = await db.execute("SELECT referred_by FROM users WHERE id = ?", [userId]);
   if (me.rows[0]?.referred_by) visibleIds.add(me.rows[0].referred_by);
-  
-  // People I follow
-  const following = await db.execute("SELECT followed_id FROM follows WHERE follower_id = ?", [userId]);
   following.rows.forEach(r => visibleIds.add(r.followed_id));
   
   return visibleIds;
@@ -1310,29 +1319,35 @@ app.get('/api/friends', authMiddleware, async (req, res) => {
     const followingResult = await db.execute("SELECT followed_id FROM follows WHERE follower_id = ?", [myId]);
     const followingSet = new Set(followingResult.rows.map(r => r.followed_id));
 
-    const friends = [];
-    for (const fid of friendIds) {
-      const u = await db.execute("SELECT id, name, primary_role, secondary_role, avatar FROM users WHERE id = ?", [fid]);
-      if (u.rows.length === 0) continue;
-      const row = u.rows[0];
-      const tc = await db.execute("SELECT COUNT(*) as cnt FROM tools WHERE user_id = ?", [fid]);
-      const toolCount = tc.rows[0].cnt || 0;
-      const sc = await db.execute("SELECT COUNT(*) as cnt FROM stacks WHERE user_id = ?", [fid]);
-      const stackCount = sc.rows[0].cnt || 0;
-      const sharedCount = await db.execute("SELECT COUNT(*) as cnt FROM stacks WHERE user_id = ? AND share_slug IS NOT NULL AND share_slug != ''", [fid]);
-      const sharedStackCount = sharedCount.rows[0].cnt || 0;
-      friends.push({
-        id: row.id,
-        name: row.name || '',
-        primary_role: row.primary_role || '',
-        secondary_role: row.secondary_role || '',
-        avatar: row.avatar || '',
-        tool_count: toolCount,
-        stack_count: stackCount,
-        shared_stack_count: sharedStackCount,
-        is_following: followingSet.has(fid)
-      });
-    }
+    // Batch: get all friend data in one query with subquery counts
+    const idArr = [...friendIds];
+    const placeholders = idArr.map(() => '?').join(',');
+    const [usersResult, toolCounts, stackCounts, sharedCounts] = await Promise.all([
+      db.execute(`SELECT id, name, primary_role, secondary_role, avatar FROM users WHERE id IN (${placeholders})`, idArr),
+      db.execute(`SELECT user_id, COUNT(*) as cnt FROM tools WHERE user_id IN (${placeholders}) GROUP BY user_id`, idArr),
+      db.execute(`SELECT user_id, COUNT(*) as cnt FROM stacks WHERE user_id IN (${placeholders}) GROUP BY user_id`, idArr),
+      db.execute(`SELECT user_id, COUNT(*) as cnt FROM stacks WHERE user_id IN (${placeholders}) AND share_slug IS NOT NULL AND share_slug != '' GROUP BY user_id`, idArr)
+    ]);
+
+    const toolCountMap = {};
+    for (const r of toolCounts.rows) toolCountMap[r.user_id] = r.cnt;
+    const stackCountMap = {};
+    for (const r of stackCounts.rows) stackCountMap[r.user_id] = r.cnt;
+    const sharedCountMap = {};
+    for (const r of sharedCounts.rows) sharedCountMap[r.user_id] = r.cnt;
+
+    const friends = usersResult.rows.map(row => ({
+      id: row.id,
+      name: row.name || '',
+      primary_role: row.primary_role || '',
+      secondary_role: row.secondary_role || '',
+      avatar: row.avatar || '',
+      tool_count: toolCountMap[row.id] || 0,
+      stack_count: stackCountMap[row.id] || 0,
+      shared_stack_count: sharedCountMap[row.id] || 0,
+      is_following: followingSet.has(row.id)
+    }));
+
     res.json({ friends });
   } catch (err) {
     console.error('Get friends error:', err);
@@ -1353,23 +1368,33 @@ app.get('/api/friends/:id/profile', authMiddleware, async (req, res) => {
     if (u.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
     const row = u.rows[0];
 
-    // Check if I'm following this person
-    const followCheck = await db.execute("SELECT id FROM follows WHERE follower_id = ? AND followed_id = ?", [myId, friendId]);
+    // Parallelize all independent queries
+    const [followCheck, toolResult, stackResult, followerCountResult] = await Promise.all([
+      db.execute("SELECT id FROM follows WHERE follower_id = ? AND followed_id = ?", [myId, friendId]),
+      db.execute("SELECT id, user_id, name, url, category, pricing, description, notes, created_at, updated_at FROM tools WHERE user_id = ? ORDER BY created_at DESC", [friendId]),
+      db.execute("SELECT id, user_id, name, description, color, icon, created_at, views, clones, share_slug FROM stacks WHERE user_id = ? AND share_slug IS NOT NULL AND share_slug != '' ORDER BY created_at DESC", [friendId]),
+      db.execute("SELECT COUNT(*) as cnt FROM follows WHERE followed_id = ?", [friendId])
+    ]);
+
     const isFollowing = followCheck.rows.length > 0;
-
-    const toolResult = await db.execute("SELECT id, user_id, name, url, category, pricing, description, notes, created_at, updated_at FROM tools WHERE user_id = ? ORDER BY created_at DESC", [friendId]);
     const tools = toolResult.rows.map(rowToTool);
-
-    const stackResult = await db.execute("SELECT id, user_id, name, description, color, icon, created_at, views, clones, share_slug FROM stacks WHERE user_id = ? AND share_slug IS NOT NULL AND share_slug != '' ORDER BY created_at DESC", [friendId]);
     const stacks = stackResult.rows.map(rowToStack);
-    for (const s of stacks) {
-      const tr = await db.execute("SELECT t.id, t.name, t.url, t.category, t.pricing, t.description FROM tools t JOIN stack_tools st ON t.id = st.tool_id WHERE st.stack_id = ? ORDER BY st.sort_order, st.added_at", [s.id]);
-      s.tools = tr.rows.map(r => ({ id: r.id, name: r.name, url: r.url, category: r.category, pricing: r.pricing, description: r.description || '' }));
-    }
-
-    // Count followers of this friend
-    const followerCountResult = await db.execute("SELECT COUNT(*) as cnt FROM follows WHERE followed_id = ?", [friendId]);
     const followerCount = followerCountResult.rows[0]?.cnt || 0;
+
+    // Batch load stack tools in a single query instead of N+1
+    if (stacks.length > 0) {
+      const stackIds = stacks.map(s => s.id);
+      const placeholders = stackIds.map(() => '?').join(',');
+      const tr = await db.execute(`SELECT st.stack_id, t.id, t.name, t.url, t.category, t.pricing, t.description FROM tools t JOIN stack_tools st ON t.id = st.tool_id WHERE st.stack_id IN (${placeholders}) ORDER BY st.sort_order, st.added_at`, stackIds);
+      const byStack = {};
+      for (const r of tr.rows) {
+        if (!byStack[r.stack_id]) byStack[r.stack_id] = [];
+        byStack[r.stack_id].push({ id: r.id, name: r.name, url: r.url, category: r.category, pricing: r.pricing, description: r.description || '' });
+      }
+      for (const s of stacks) {
+        s.tools = byStack[s.id] || [];
+      }
+    }
 
     res.json({
       friend: { id: row.id, name: row.name || '', primary_role: row.primary_role || '', secondary_role: row.secondary_role || '', avatar: row.avatar || '', is_following: isFollowing, created_at: row.created_at || '', follower_count: followerCount },
@@ -1697,6 +1722,10 @@ async function initSchema() {
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_tools_user ON tools(user_id)"); } catch {}
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_stacks_user ON stacks(user_id)"); } catch {}
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_stack_tools_stack ON stack_tools(stack_id)"); } catch {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_stack_tools_tool ON stack_tools(tool_id)"); } catch {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_stacks_share_slug ON stacks(share_slug)"); } catch {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)"); } catch {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)"); } catch {}
   
   db.saveToFile();
 }
