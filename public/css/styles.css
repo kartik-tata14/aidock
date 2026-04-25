@@ -2283,8 +2283,11 @@ a:hover { text-decoration: underline; }
 .user-dropdown-action:hover svg { opacity: 1; }
 .user-dropdown-signout { color: var(--danger); }
 .user-dropdown-signout:hover { background: rgba(255,59,48,.08); color: var(--danger); }
+.user-dropdown-delete { color: var(--text-secondary); font-size: 11px; opacity: .7; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 10px; }
+.user-dropdown-delete:hover { background: rgba(255,59,48,.08); color: var(--danger); opacity: 1; }
 [data-theme="dark"] .user-dropdown-action:hover { background: rgba(255,255,255,.06); }
 [data-theme="dark"] .user-dropdown-signout:hover { background: rgba(255,59,48,.12); }
+[data-theme="dark"] .user-dropdown-delete:hover { background: rgba(255,59,48,.12); }
 
 /* Theme toggle */
 .theme-toggle {

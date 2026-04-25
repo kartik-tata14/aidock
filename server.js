@@ -257,6 +257,47 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// Delete account permanently (GDPR compliance)
+app.delete('/api/auth/account', authMiddleware, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Password is required to confirm account deletion.' });
+
+    // Verify password
+    const userResult = await db.execute("SELECT password_hash FROM users WHERE id = ?", [req.user.id]);
+    if (userResult.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    const valid = await bcrypt.compare(password, userResult.rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: 'Incorrect password.' });
+
+    const userId = req.user.id;
+
+    // Get user's stack IDs so we can delete their stack_tools
+    const userStacks = await db.execute("SELECT id FROM stacks WHERE user_id = ?", [userId]);
+    const stackIds = userStacks.rows.map(r => r.id);
+
+    // Delete in dependency order
+    if (stackIds.length > 0) {
+      const placeholders = stackIds.map(() => '?').join(',');
+      await db.execute(`DELETE FROM stack_tools WHERE stack_id IN (${placeholders})`, stackIds);
+    }
+    // Also remove this user's tools from OTHER users' stacks (stack_tools references tool_id)
+    await db.execute("DELETE FROM stack_tools WHERE tool_id IN (SELECT id FROM tools WHERE user_id = ?)", [userId]);
+
+    await db.execute("DELETE FROM stacks WHERE user_id = ?", [userId]);
+    await db.execute("DELETE FROM tools WHERE user_id = ?", [userId]);
+    await db.execute("DELETE FROM follows WHERE follower_id = ? OR followed_id = ?", [userId, userId]);
+    await db.execute("DELETE FROM referrals WHERE referrer_id = ? OR referred_id = ?", [userId, userId]);
+    await db.execute("DELETE FROM users WHERE id = ?", [userId]);
+
+    db.saveToFile();
+    res.clearCookie('aidock_token');
+    res.json({ ok: true, message: 'Account deleted successfully.' });
+  } catch (err) {
+    console.error('Account deletion error:', err);
+    res.status(500).json({ error: 'Failed to delete account. Please try again.' });
+  }
+});
+
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const [result, refResult] = await Promise.all([

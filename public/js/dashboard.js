@@ -919,6 +919,51 @@
     window.location.href = '/';
   });
 
+  // Delete Account
+  const deleteAccountOverlay = $('#deleteAccountOverlay');
+  const deleteAccountError = $('#deleteAccountError');
+  const deleteAccountPasswordInput = $('#deleteAccountPassword');
+
+  function openDeleteAccount() {
+    $('#userDropdown').classList.remove('open');
+    deleteAccountPasswordInput.value = '';
+    deleteAccountError.style.display = 'none';
+    deleteAccountOverlay.classList.add('open');
+    setTimeout(() => deleteAccountPasswordInput.focus(), 150);
+  }
+  function closeDeleteAccount() {
+    deleteAccountOverlay.classList.remove('open');
+    deleteAccountPasswordInput.value = '';
+    deleteAccountError.style.display = 'none';
+  }
+
+  $('#deleteAccountBtn').addEventListener('click', openDeleteAccount);
+  $('#deleteAccountClose').addEventListener('click', closeDeleteAccount);
+  $('#deleteAccountCancelBtn').addEventListener('click', closeDeleteAccount);
+  deleteAccountOverlay.addEventListener('click', (e) => { if (e.target === deleteAccountOverlay) closeDeleteAccount(); });
+
+  $('#deleteAccountConfirmBtn').addEventListener('click', async () => {
+    const password = deleteAccountPasswordInput.value;
+    if (!password) {
+      deleteAccountError.textContent = 'Please enter your password.';
+      deleteAccountError.style.display = '';
+      return;
+    }
+    const btn = $('#deleteAccountConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    deleteAccountError.style.display = 'none';
+    try {
+      await api('/api/auth/account', { method: 'DELETE', body: JSON.stringify({ password }) });
+      window.location.href = '/auth';
+    } catch (err) {
+      deleteAccountError.textContent = err.message || 'Failed to delete account.';
+      deleteAccountError.style.display = '';
+      btn.disabled = false;
+      btn.textContent = 'Delete My Account';
+    }
+  });
+
   const ROLE_OPTIONS = ['Marketing','Frontend Development','Backend Development','Full Stack Development','UI/UX Design','Graphic Design','Data Science','Data Analytics','Product Management','Project Management','Content Writing','Copywriting','Sales','Customer Support','HR / People Ops','Finance / Accounting','Legal','DevOps / SRE','Cybersecurity','AI / ML Engineering','Research','Education / Training','Video / Audio Production','Consulting','Founder / Entrepreneur','Student','Other'];
 
   // Change avatar from dropdown
@@ -1148,7 +1193,7 @@
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeModal(); closeDelete(); closeStackModal(); closeFolder(); }
+    if (e.key === 'Escape') { closeModal(); closeDelete(); closeStackModal(); closeFolder(); closeDeleteAccount(); }
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchInput.focus(); }
   });
 
