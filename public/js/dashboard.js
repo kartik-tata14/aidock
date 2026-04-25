@@ -95,16 +95,6 @@
         if (route.page === 'friend' && route.friendId) {
           await openFriendProfileById(route.friendId);
         } else {
-          // Reset friend profile tabs when leaving
-          if (friendProfileOverlay && friendProfileOverlay.style.display !== 'none') {
-            friendProfileOverlay.querySelectorAll('.friend-tab').forEach(t => t.classList.remove('active'));
-            const toolsTabBtn = friendProfileOverlay.querySelector('.friend-tab[data-tab="tools"]');
-            if (toolsTabBtn) toolsTabBtn.classList.add('active');
-            const friendToolsTab = document.getElementById('friendToolsTab');
-            const friendStacksTab = document.getElementById('friendStacksTab');
-            if (friendToolsTab) friendToolsTab.style.display = '';
-            if (friendStacksTab) friendStacksTab.style.display = 'none';
-          }
           friendProfileOverlay.style.display = 'none';
         }
       }
@@ -2098,7 +2088,7 @@
       renderFriendProfile();
       friendProfileOverlay.style.display = '';
     } catch (err) {
-      alert(err.message || 'Could not load friend profile.');
+      showToast(err.message || 'Could not load friend profile.', 'error');
     }
   }
 
@@ -2113,25 +2103,44 @@
 
     const followBtnHtml = friend.is_following 
       ? `<button class="follow-btn follow-btn-following profile-follow-btn" data-user-id="${friend.id}">Following ✓</button>`
-      : '';
+      : `<button class="follow-btn follow-btn-follow profile-follow-btn" data-user-id="${friend.id}">Follow</button>`;
 
+    let joinedHtml = '';
+    if (friend.created_at) {
+      const d = new Date(friend.created_at);
+      if (!isNaN(d)) joinedHtml = `<div class="friend-profile-joined">Member since ${d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>`;
+    }
+
+    const followerCount = friend.follower_count || 0;
+
+    // ── Hero Header ──
     $('#friendProfileHeader').innerHTML = `
-      <div class="friend-profile-avatar" style="${avatarStyle}">${friend.avatar ? '' : initials}</div>
-      <div class="friend-profile-name">${esc(friend.name)}</div>
-      ${roles ? `<div class="friend-profile-role">${esc(roles)}</div>` : ''}
-      ${followBtnHtml}
+      <div class="friend-profile-body">
+        <div class="friend-profile-avatar" style="${avatarStyle}">${friend.avatar ? '' : initials}</div>
+        <div class="friend-profile-identity">
+          <div class="friend-profile-name">${esc(friend.name)}'s Dashboard</div>
+          ${roles ? `<div class="friend-profile-role">${esc(roles)}</div>` : ''}
+          ${joinedHtml}
+        </div>
+        <div class="friend-profile-right">
+          <div class="friend-profile-stats">
+            <div class="friend-stat"><span class="friend-stat-num">${fTools.length}</span><span class="friend-stat-label">Tools</span></div>
+            <div class="friend-stat"><span class="friend-stat-num">${fStacks.length}</span><span class="friend-stat-label">Stacks</span></div>
+            <div class="friend-stat"><span class="friend-stat-num">${followerCount}</span><span class="friend-stat-label">Followers</span></div>
+          </div>
+          ${followBtnHtml}
+        </div>
+      </div>
     `;
 
-    // Bind profile follow/unfollow button
+    // Bind follow/unfollow
     const profileFollowBtn = $('#friendProfileHeader').querySelector('.profile-follow-btn');
     if (profileFollowBtn) {
       profileFollowBtn.addEventListener('click', async () => {
         const userId = Number(profileFollowBtn.dataset.userId);
         const isCurrentlyFollowing = profileFollowBtn.classList.contains('follow-btn-following');
-        
         profileFollowBtn.disabled = true;
         profileFollowBtn.textContent = isCurrentlyFollowing ? 'Unfollowing...' : 'Following...';
-        
         try {
           if (isCurrentlyFollowing) {
             await api('/api/follows/' + userId, { method: 'DELETE' });
@@ -2144,157 +2153,170 @@
             profileFollowBtn.textContent = 'Following ✓';
             friend.is_following = true;
           }
-          // Refresh friends list in background
           loadFriends();
         } catch (err) {
-          alert(err.message || 'Operation failed.');
+          showToast(err.message || 'Operation failed.', 'error');
           profileFollowBtn.textContent = isCurrentlyFollowing ? 'Following ✓' : 'Follow';
         }
         profileFollowBtn.disabled = false;
       });
     }
 
-    // Tools tab
-    const toolsTab = $('#friendToolsTab');
+    // ── Content: Stacks + Tool Cards ──
+    const contentEl = $('#friendProfileContent');
+    let html = '';
+
+    // Shared Stacks section
+    if (fStacks.length > 0) {
+      html += `<div class="fp-section">
+        <div class="fp-section-header">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Shared Stacks <span class="fp-section-count">${fStacks.length}</span>
+        </div>
+        <div class="fp-stacks-row">${fStacks.map(s => {
+          const toolCount = s.tools ? s.tools.length : 0;
+          return `<div class="fp-stack-item" data-slug="${s.share_slug}">
+            <span class="fp-stack-icon">${s.icon || '📂'}</span>
+            <div class="fp-stack-info">
+              <div class="fp-stack-name">${esc(s.name)}</div>
+              <div class="fp-stack-meta">${toolCount} tool${toolCount !== 1 ? 's' : ''} · ${s.views || 0} views</div>
+            </div>
+            <button class="fp-stack-clone" data-slug="${s.share_slug}">Clone</button>
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    }
+
+    // Tools section - using the same card design as My View
+    html += `<div class="fp-section">
+      <div class="fp-section-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        AI Tools <span class="fp-section-count">${fTools.length}</span>
+      </div>`;
+
+    // Pre-check which tools are already in user's dock (by hostname)
+    const savedHosts = new Set(tools.map(t => {
+      try { return new URL(t.url).hostname.replace(/^www\./, ''); } catch { return ''; }
+    }).filter(Boolean));
+
     if (fTools.length === 0) {
-      toolsTab.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px">No tools yet.</p>';
+      html += `<div class="fp-empty"><div class="fp-empty-icon">🔧</div>No tools saved yet.</div>`;
     } else {
-      toolsTab.innerHTML = `<div class="friend-tools-grid">${fTools.map(t => {
+      html += `<div class="fp-cards-grid">${fTools.map((t, i) => {
+        const toolInitials = t.name.slice(0, 2);
+        const catClass = catClassMap[t.category] || 'cat-other';
         const domain = t.url ? t.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : '';
         const faviconHtml = domain
-          ? `<img class="friend-tool-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          ? `<img class="card-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
           : '';
-        const initials2 = t.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-        const fallback = `<div class="friend-tool-favicon-fallback" ${domain ? 'style="display:none"' : ''}>${esc(initials2)}</div>`;
-        return `
-          <div class="friend-tool-card">
-            ${faviconHtml}${fallback}
-            <div class="friend-tool-info">
-              <div class="friend-tool-name">${esc(t.name)}</div>
-              ${t.description ? `<div class="friend-tool-desc">${esc(t.description)}</div>` : ''}
-              <div class="friend-tool-meta">
-                <span class="friend-tool-badge">${esc(t.category)}</span>
-                <span class="friend-tool-badge">${esc(t.pricing)}</span>
-              </div>
+        const fallbackAvatar = `<div class="card-avatar-fallback ${catClass}" ${domain ? 'style="display:none"' : ''}>${esc(toolInitials)}</div>`;
+        const linkHtml = t.url ? `<a class="card-link" href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>` : '';
+        const descHtml = t.description ? `<div class="card-desc">${esc(t.description)}</div>` : '';
+        const toolData = btoa(encodeURIComponent(JSON.stringify({ name: t.name, url: t.url, category: t.category, pricing: t.pricing, description: t.description, notes: t.notes || '' })));
+        const toolHost = domain.replace(/^www\./, '');
+        const isAlreadyAdded = savedHosts.has(toolHost);
+        const addBtnClass = isAlreadyAdded ? 'fp-card-add-btn added' : 'fp-card-add-btn';
+        const addBtnContent = isAlreadyAdded
+          ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Added'
+          : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add';
+
+        return `<div class="card" style="animation-delay:${i * 40}ms">
+          <div class="card-header">
+            <div class="card-avatar-wrap">${faviconHtml}${fallbackAvatar}</div>
+            <div class="card-title-group">
+              <div class="card-name" title="${esc(t.name)}">${esc(t.name)}</div>
+              ${domain ? `<div class="card-url">${esc(domain)}</div>` : ''}
             </div>
-            <button class="friend-tool-add" data-tool='${JSON.stringify({ name: t.name, url: t.url, category: t.category, pricing: t.pricing, description: t.description, notes: t.notes || '' }).replace(/'/g, '&#39;')}' title="Add to My Dock">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <button class="${addBtnClass}" data-add-tool="${toolData}" title="Add to My Dock">
+              ${addBtnContent}
             </button>
-          </div>`;
+          </div>
+          <div class="card-body">
+            <div class="card-badges">
+              <span class="badge badge-category">${catIconMap[t.category]||'📦'} ${esc(t.category)}</span>
+              <span class="badge badge-pricing" data-pricing="${t.pricing}">${t.pricing}</span>
+            </div>
+            ${descHtml}
+          </div>
+          <div class="card-footer">
+            ${linkHtml}
+            <span class="card-date">${new Date(t.created_at || Date.now()).toLocaleDateString('en-GB', {day:'numeric',month:'short'})}</span>
+          </div>
+        </div>`;
       }).join('')}</div>`;
-
-      // Add tool click handlers
-      toolsTab.querySelectorAll('.friend-tool-add').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          if (btn.classList.contains('added')) return;
-          try {
-            const toolData = JSON.parse(btn.dataset.tool);
-            await api('/api/tools', { method: 'POST', body: JSON.stringify(toolData) });
-            btn.classList.add('added');
-            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
-            // Refresh my tools in background
-            const td = await api('/api/tools');
-            tools = td.tools || [];
-          } catch (err) {
-            if (err.message.includes('already')) {
-              btn.classList.add('added');
-              btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
-            } else if (err.message.includes('limit')) {
-              alert('Tool limit reached! Get Pro or invite friends for more slots.');
-            } else {
-              alert(err.message);
-            }
-          }
-        });
-      });
     }
+    html += `</div>`;
 
-    // Stacks tab
-    const stacksTab = $('#friendStacksTab');
-    if (fStacks.length === 0) {
-      stacksTab.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px">No shared stacks yet.</p>';
-    } else {
-      stacksTab.innerHTML = `<div class="friend-stacks-grid">${fStacks.map(s => `
-        <div class="friend-stack-card" data-slug="${s.share_slug}" style="cursor:pointer">
-          <div class="friend-stack-top">
-            <span class="friend-stack-icon">${s.icon || '📂'}</span>
-            <span class="friend-stack-name">${esc(s.name)}</span>
-          </div>
-          ${s.description ? `<div class="friend-stack-desc">${esc(s.description)}</div>` : ''}
-          <div class="friend-stack-footer">
-            <span class="friend-stack-stat">${s.tools ? s.tools.length : 0} tools · ${s.views || 0} views</span>
-            <button class="friend-stack-clone" data-slug="${s.share_slug}">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Clone
-            </button>
-          </div>
-        </div>`).join('')}</div>`;
+    contentEl.innerHTML = html;
 
-      // Stack card click to open shared page
-      stacksTab.querySelectorAll('.friend-stack-card').forEach(card => {
-        card.addEventListener('click', () => {
-          const slug = card.dataset.slug;
-          if (slug) window.open(`/stack/${slug}`, '_blank');
-        });
+    // ── Bind event handlers ──
+
+    // Stack click → open shared page
+    contentEl.querySelectorAll('.fp-stack-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.fp-stack-clone')) return;
+        const slug = item.dataset.slug;
+        if (slug) window.open(`/stack/${slug}`, '_blank');
       });
-
-      // Clone handlers
-      stacksTab.querySelectorAll('.friend-stack-clone').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          if (btn.classList.contains('cloned')) return;
-          try {
-            const slug = btn.dataset.slug;
-            const data = await api('/api/stacks/clone/' + slug, { method: 'POST' });
-            btn.classList.add('cloned');
-            btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Cloned';
-            // Refresh my data in background
-            const td = await api('/api/tools');
-            tools = td.tools || [];
-            const sd = await api('/api/stacks');
-            stacks = sd.stacks || [];
-            if (data.skipped > 0) {
-              alert(`Stack cloned! ${data.skipped} tool(s) skipped due to your tool limit.`);
-            }
-          } catch (err) {
-            alert(err.message || 'Clone failed.');
-          }
-        });
-      });
-    }
-
-    // Tab switching
-    friendProfileOverlay.querySelectorAll('.friend-tab').forEach(tab => {
-      tab.onclick = () => {
-        friendProfileOverlay.querySelectorAll('.friend-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        const tabName = tab.dataset.tab;
-        moveFriendTabSlider(tab);
-        $('#friendToolsTab').style.display = tabName === 'tools' ? '' : 'none';
-        $('#friendStacksTab').style.display = tabName === 'stacks' ? '' : 'none';
-      };
     });
 
-    // Position slider on initial tab (use setTimeout to ensure DOM is rendered)
-    const activeTab = friendProfileOverlay.querySelector('.friend-tab.active');
-    const slider = document.querySelector('.friend-tab-slider');
-    if (slider) slider.classList.remove('ready');
-    setTimeout(() => {
-      if (activeTab) moveFriendTabSlider(activeTab, true);
-    }, 20);
+    // Stack clone
+    contentEl.querySelectorAll('.fp-stack-clone').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (btn.classList.contains('cloned')) return;
+        try {
+          const slug = btn.dataset.slug;
+          const data = await api('/api/stacks/clone/' + slug, { method: 'POST' });
+          btn.classList.add('cloned');
+          btn.textContent = '✓ Cloned';
+          const td = await api('/api/tools');
+          tools = td.tools || [];
+          const sd = await api('/api/stacks');
+          stacks = sd.stacks || [];
+          if (data.skipped > 0) {
+            showToast(`Stack cloned! ${data.skipped} tool(s) skipped due to your tool limit.`, 'info');
+          } else {
+            showToast('Stack cloned to your dashboard!', 'success');
+          }
+        } catch (err) {
+          showToast(err.message || 'Clone failed.', 'error');
+        }
+      });
+    });
+
+    // Add tool to dock
+    contentEl.querySelectorAll('.fp-card-add-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (btn.classList.contains('added')) {
+          showToast('This tool is already in your dashboard.', 'info');
+          return;
+        }
+        try {
+          const toolData = JSON.parse(decodeURIComponent(atob(btn.dataset.addTool)));
+          await api('/api/tools', { method: 'POST', body: JSON.stringify(toolData) });
+          btn.classList.add('added');
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Added';
+          showToast('Tool added to your dock!', 'success');
+          const td = await api('/api/tools');
+          tools = td.tools || [];
+        } catch (err) {
+          if (err.message.includes('already')) {
+            btn.classList.add('added');
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Added';
+          } else if (err.message.includes('limit')) {
+            showToast('Tool limit reached! Get Pro or invite friends for more slots.', 'error');
+          } else {
+            showToast(err.message, 'error');
+          }
+        }
+      });
+    });
   }
 
   // Back button
   $('#friendProfileBack').addEventListener('click', () => {
-    // Reset tabs before navigating
-    friendProfileOverlay.querySelectorAll('.friend-tab').forEach(t => t.classList.remove('active'));
-    friendProfileOverlay.querySelector('.friend-tab[data-tab="tools"]').classList.add('active');
-    const slider = document.querySelector('.friend-tab-slider');
-    if (slider) slider.classList.remove('ready');
-    $('#friendToolsTab').style.display = '';
-    $('#friendStacksTab').style.display = 'none';
-    // Navigate back to social view
     router.navigate('/dashboard/social');
   });
 

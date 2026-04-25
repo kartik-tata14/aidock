@@ -3119,7 +3119,7 @@ a:hover { text-decoration: underline; }
   background: var(--bg); overflow-y: auto;
 }
 .friend-profile-panel {
-  max-width: 800px; margin: 0 auto; padding: 24px;
+  max-width: 960px; margin: 0 auto; padding: 24px;
 }
 .friend-profile-back {
   display: inline-flex; align-items: center; gap: 8px;
@@ -3134,46 +3134,118 @@ a:hover { text-decoration: underline; }
 }
 .friend-profile-back svg { transition: transform .15s ease; }
 .friend-profile-back:hover svg { transform: translateX(-2px); }
+
+/* ── Profile Hero Card ── */
 .friend-profile-header {
-  text-align: center; padding: 20px 0 16px;
-  border-bottom: 1px solid var(--border); margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.friend-profile-body {
+  padding: 20px 28px;
+  display: flex; align-items: center; gap: 20px;
+  flex-wrap: wrap;
 }
 .friend-profile-avatar {
-  width: 72px; height: 72px; border-radius: 50%;
+  width: 60px; height: 60px; border-radius: 50%;
   background: linear-gradient(135deg, #5e5ce6, #0a84ff);
   display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 26px; font-weight: 700; text-transform: uppercase;
-  margin: 0 auto 10px;
+  color: #fff; font-size: 22px; font-weight: 700; text-transform: uppercase;
+  flex-shrink: 0;
 }
-.friend-profile-name { font-size: 20px; font-weight: 700; color: var(--text); }
-.friend-profile-role { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
-.profile-follow-btn { margin-top: 12px; }
+.friend-profile-identity { flex: 1; min-width: 0; padding-bottom: 2px; }
+.friend-profile-name { font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.friend-profile-role {
+  font-size: 12px; color: var(--text-secondary); margin-top: 3px;
+}
+.friend-profile-joined {
+  font-size: 11px; color: var(--text-secondary); margin-top: 2px; opacity: 0.7;
+}
+.friend-profile-right {
+  display: flex; align-items: center; gap: 20px; flex-shrink: 0;
+  padding-bottom: 4px;
+}
+.friend-profile-stats {
+  display: flex; gap: 18px;
+}
+.friend-stat {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+.friend-stat-num {
+  font-size: 17px; font-weight: 800; color: var(--text);
+}
+.friend-stat-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-secondary);
+}
+.profile-follow-btn { white-space: nowrap; }
 
-.friend-profile-tabs {
-  position: relative;
-  display: flex; gap: 0; background: var(--surface-solid); border: 1px solid var(--border);
-  border-radius: 10px; padding: 3px; margin-bottom: 20px; width: fit-content;
+/* ── Dashboard-style content ── */
+.fp-section {
+  margin-bottom: 24px;
 }
-.friend-tab-slider {
-  position: absolute; top: 3px; left: 3px;
-  height: calc(100% - 6px); width: 60px;
-  background: var(--accent); border-radius: 8px;
-  transition: left .3s cubic-bezier(.4,0,.2,1), width .3s cubic-bezier(.4,0,.2,1), opacity .2s ease;
-  box-shadow: 0 2px 8px rgba(0,122,255,0.3);
-  opacity: 0;
+.fp-section-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 18px;
+  font-size: 15px; font-weight: 700; color: var(--text);
 }
-.friend-tab-slider.ready { opacity: 1; }
-.friend-tab {
-  position: relative; z-index: 1;
-  padding: 7px 18px; font-size: 13px; font-weight: 600;
-  border: none; border-radius: 8px; cursor: pointer;
-  background: transparent; color: var(--text);
-  transition: color .2s;
+.fp-section-header svg { color: var(--accent); flex-shrink: 0; }
+.fp-section-count {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 2px 10px; border-radius: 20px;
 }
-.friend-tab:hover { color: var(--text); }
-.friend-tab.active { color: #fff; }
-.friend-tab-slider:not(.ready) + .friend-tab.active,
-.friend-tab-slider:not(.ready) ~ .friend-tab.active { color: var(--accent); }
+
+/* Stacks row inside friend profile */
+.fp-stacks-row {
+  display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px;
+}
+.fp-stack-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 12px 16px; min-width: 220px;
+  cursor: pointer; transition: all .15s; flex-shrink: 0;
+}
+.fp-stack-item:hover { border-color: var(--accent); box-shadow: var(--shadow); transform: translateY(-2px); }
+.fp-stack-icon { font-size: 24px; flex-shrink: 0; }
+.fp-stack-info { flex: 1; min-width: 0; }
+.fp-stack-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-stack-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.fp-stack-clone {
+  flex-shrink: 0; padding: 6px 10px; font-size: 11px; font-weight: 600;
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.fp-stack-clone:hover { filter: brightness(1.1); }
+.fp-stack-clone.cloned { background: #34c759; pointer-events: none; }
+
+/* Tool cards - reuse .card styles from main dashboard, with add button override */
+.fp-cards-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
+}
+@media (max-width: 960px) { .fp-cards-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .fp-cards-grid { grid-template-columns: 1fr; } }
+.fp-card-add-btn {
+  flex-shrink: 0; align-self: center;
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 12px; font-size: 11px; font-weight: 600;
+  background: transparent; border: 1px solid var(--accent);
+  color: var(--accent); border-radius: 8px; cursor: pointer;
+  transition: all .15s; white-space: nowrap;
+}
+.fp-card-add-btn:hover { background: var(--accent); color: #fff; }
+.fp-card-add-btn.added { border-color: #34c759; color: #34c759; pointer-events: none; }
+
+/* Empty state */
+.fp-empty {
+  text-align: center; padding: 32px 20px;
+  color: var(--text-secondary); font-size: 13px;
+}
+.fp-empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+/* (unused - kept for reference) */
 
 .friend-tools-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

@@ -1335,7 +1335,7 @@ app.get('/api/friends/:id/profile', authMiddleware, async (req, res) => {
 
     if (!friendIds.has(friendId)) return res.status(403).json({ error: 'You are not following this person.' });
 
-    const u = await db.execute("SELECT id, name, primary_role, secondary_role, avatar FROM users WHERE id = ?", [friendId]);
+    const u = await db.execute("SELECT id, name, primary_role, secondary_role, avatar, created_at FROM users WHERE id = ?", [friendId]);
     if (u.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
     const row = u.rows[0];
 
@@ -1353,8 +1353,12 @@ app.get('/api/friends/:id/profile', authMiddleware, async (req, res) => {
       s.tools = tr.rows.map(r => ({ id: r.id, name: r.name, url: r.url, category: r.category, pricing: r.pricing, description: r.description || '' }));
     }
 
+    // Count followers of this friend
+    const followerCountResult = await db.execute("SELECT COUNT(*) as cnt FROM follows WHERE followed_id = ?", [friendId]);
+    const followerCount = followerCountResult.rows[0]?.cnt || 0;
+
     res.json({
-      friend: { id: row.id, name: row.name || '', primary_role: row.primary_role || '', secondary_role: row.secondary_role || '', avatar: row.avatar || '', is_following: isFollowing },
+      friend: { id: row.id, name: row.name || '', primary_role: row.primary_role || '', secondary_role: row.secondary_role || '', avatar: row.avatar || '', is_following: isFollowing, created_at: row.created_at || '', follower_count: followerCount },
       tools,
       stacks
     });
