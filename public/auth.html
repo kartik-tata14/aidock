@@ -204,7 +204,55 @@
             <div id="loginError" class="form-error"></div>
             <button type="submit" class="btn-primary btn-auth-v2">Log In</button>
           </form>
+          <p class="auth-forgot-link"><a href="#" id="showForgot">Forgot password?</a></p>
           <p class="auth-toggle-v2">New here? <a href="#" id="showSignup">Create an account</a></p>
+        </div>
+
+        <!-- Forgot password – enter email -->
+        <div id="forgotView" style="display:none">
+          <div class="otp-header">
+            <div class="otp-icon">🔑</div>
+            <h2>Reset your password</h2>
+            <p class="auth-form-sub">Enter your email and we'll send you a code to reset your password.</p>
+          </div>
+          <form id="forgotForm" autocomplete="off">
+            <div class="form-group">
+              <label for="forgotEmail">Email</label>
+              <input type="email" id="forgotEmail" placeholder="you@example.com" required maxlength="100">
+            </div>
+            <div id="forgotError" class="form-error"></div>
+            <button type="submit" class="btn-primary btn-auth-v2">Send Reset Code</button>
+          </form>
+          <div class="otp-actions">
+            <button class="otp-back-btn" id="forgotBackBtn">Back to login</button>
+          </div>
+        </div>
+
+        <!-- Reset password – enter OTP + new password -->
+        <div id="resetView" style="display:none">
+          <div class="otp-header">
+            <div class="otp-icon">🔒</div>
+            <h2>Enter reset code</h2>
+            <p class="auth-form-sub">We sent a 6-digit code to <strong id="resetEmail"></strong></p>
+          </div>
+          <form id="resetForm" autocomplete="off">
+            <div class="form-group">
+              <label for="resetOtpInput">Verification Code</label>
+              <input type="text" id="resetOtpInput" class="otp-input-field" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" required autocomplete="one-time-code">
+            </div>
+            <div class="form-group">
+              <label for="resetNewPassword">New Password</label>
+              <input type="password" id="resetNewPassword" placeholder="At least 6 characters" required minlength="6" maxlength="128">
+            </div>
+            <div id="resetError" class="form-error"></div>
+            <button type="submit" class="btn-primary btn-auth-v2">Reset Password</button>
+          </form>
+          <div class="otp-actions">
+            <span class="otp-timer" id="resetTimer">Resend code in <strong id="resetCountdown">60</strong>s</span>
+            <button class="otp-resend-btn" id="resetResendBtn" style="display:none">Resend Code</button>
+            <span class="otp-divider">·</span>
+            <button class="otp-back-btn" id="resetBackBtn">Back to login</button>
+          </div>
         </div>
       </div>
     </div>

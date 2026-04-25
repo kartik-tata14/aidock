@@ -226,6 +226,35 @@ async function sendOTPEmail(email, otp, name) {
   }
 }
 
+// Helper: send password reset email
+async function sendResetEmail(email, otp, name) {
+  if (!resend) return false;
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: [email],
+      subject: `${otp} — Reset your AIDock password`,
+      html: `
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+          <div style="text-align:center;margin-bottom:24px">
+            <span style="font-size:28px;font-weight:800;color:#0a84ff">⬡ AIDock</span>
+          </div>
+          <p style="font-size:15px;color:#333;margin-bottom:4px">Hi ${name},</p>
+          <p style="font-size:15px;color:#333;margin-bottom:24px">We received a request to reset your password. Enter this code to set a new one:</p>
+          <div style="text-align:center;margin:24px 0">
+            <span style="font-size:36px;font-weight:800;letter-spacing:8px;color:#111;background:#f5f5f5;padding:16px 32px;border-radius:12px;display:inline-block">${otp}</span>
+          </div>
+          <p style="font-size:13px;color:#888;text-align:center;margin-top:24px">This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.</p>
+        </div>
+      `
+    });
+    return true;
+  } catch (err) {
+    console.error('Reset email send error:', err);
+    return false;
+  }
+}
+
 // Helper: create user from verified data (shared by OTP and direct signup flows)
 async function createVerifiedUser({ name, email, password_hash, primary_role, secondary_role, invite_code }) {
   const newInviteCode = crypto.randomBytes(6).toString('hex');
@@ -428,6 +457,98 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   res.clearCookie('aidock_token');
   res.json({ ok: true });
+});
+
+// Forgot password – send reset OTP
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const email = (req.body.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    // Always return success to avoid email enumeration
+    const user = await db.execute("SELECT name FROM users WHERE email = ?", [email]);
+    if (user.rows.length === 0) return res.json({ ok: true });
+
+    if (!resend) return res.json({ ok: true });
+
+    const otp = generateOTP();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    // Upsert: delete any existing reset for this email, then insert
+    await db.execute("DELETE FROM password_resets WHERE email = ?", [email]);
+    await db.execute(
+      "INSERT INTO password_resets (email, otp_hash, expires_at) VALUES (?, ?, ?)",
+      [email, otpHash, expiresAt]
+    );
+
+    await sendResetEmail(email, otp, user.rows[0].name);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Resend password reset OTP
+app.post('/api/auth/resend-reset-otp', async (req, res) => {
+  try {
+    const email = (req.body.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    const pending = await db.execute("SELECT email FROM password_resets WHERE email = ?", [email]);
+    if (pending.rows.length === 0) return res.status(400).json({ error: 'No pending reset found. Please start over.' });
+
+    const user = await db.execute("SELECT name FROM users WHERE email = ?", [email]);
+    if (user.rows.length === 0) return res.status(400).json({ error: 'No pending reset found. Please start over.' });
+
+    const otp = generateOTP();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    await db.execute("UPDATE password_resets SET otp_hash = ?, expires_at = ? WHERE email = ?",
+      [otpHash, expiresAt, email]);
+
+    await sendResetEmail(email, otp, user.rows[0].name);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Resend reset OTP error:', err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Reset password – verify OTP and set new password
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const email = (req.body.email || '').trim().toLowerCase();
+    const otp = (req.body.otp || '').trim();
+    const newPassword = req.body.newPassword || '';
+
+    if (!email || !otp || !newPassword) return res.status(400).json({ error: 'All fields are required.' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    if (newPassword.length > 128) return res.status(400).json({ error: 'Password too long.' });
+
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const record = await db.execute(
+      "SELECT * FROM password_resets WHERE email = ? AND otp_hash = ?",
+      [email, otpHash]
+    );
+
+    if (record.rows.length === 0) return res.status(400).json({ error: 'Invalid or expired code.' });
+    if (new Date(record.rows[0].expires_at) < new Date()) {
+      await db.execute("DELETE FROM password_resets WHERE email = ?", [email]);
+      return res.status(400).json({ error: 'Code has expired. Please request a new one.' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db.execute("UPDATE users SET password_hash = ? WHERE email = ?", [passwordHash, email]);
+    await db.execute("DELETE FROM password_resets WHERE email = ?", [email]);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
 });
 
 // Delete account permanently (GDPR compliance)
@@ -1919,6 +2040,17 @@ async function initSchema() {
   
   // Clean up expired pending verifications (older than 1 hour)
   try { await db.execute("DELETE FROM email_verifications WHERE expires_at < datetime('now', '-1 hour')"); } catch {}
+
+  // Password resets table
+  await db.execute(`CREATE TABLE IF NOT EXISTS password_resets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    otp_hash TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT (datetime('now'))
+  )`);
+  try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pr_email ON password_resets(email)"); } catch {}
+  try { await db.execute("DELETE FROM password_resets WHERE expires_at < datetime('now', '-1 hour')"); } catch {}
   
   // Backfill invite codes
   const noCode = await db.execute("SELECT id FROM users WHERE invite_code IS NULL OR invite_code = ''");

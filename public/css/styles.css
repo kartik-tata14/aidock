@@ -1420,6 +1420,11 @@ a:hover { text-decoration: underline; }
   font-size: 13px; color: var(--text-secondary); margin-top: 20px; text-align: center;
 }
 .auth-toggle-v2 a { color: var(--accent); font-weight: 600; }
+.auth-forgot-link {
+  font-size: 13px; color: var(--text-secondary); margin-top: 12px; text-align: right;
+}
+.auth-forgot-link a { color: var(--text-secondary); text-decoration: none; }
+.auth-forgot-link a:hover { color: var(--accent); }
 
 /* OTP Verification View */
 .otp-header { text-align: center; margin-bottom: 20px; }

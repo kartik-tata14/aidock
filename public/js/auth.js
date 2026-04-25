@@ -18,18 +18,33 @@
   const signupView = document.getElementById('signupView');
   const loginView  = document.getElementById('loginView');
   const otpView    = document.getElementById('otpView');
+  const forgotView = document.getElementById('forgotView');
+  const resetView  = document.getElementById('resetView');
+
+  function hideAllViews() {
+    signupView.style.display = 'none';
+    loginView.style.display = 'none';
+    otpView.style.display = 'none';
+    forgotView.style.display = 'none';
+    resetView.style.display = 'none';
+  }
 
   document.getElementById('showLogin').addEventListener('click', (e) => {
     e.preventDefault();
-    signupView.style.display = 'none';
-    otpView.style.display = 'none';
+    hideAllViews();
     loginView.style.display = 'block';
   });
   document.getElementById('showSignup').addEventListener('click', (e) => {
     e.preventDefault();
-    loginView.style.display = 'none';
-    otpView.style.display = 'none';
+    hideAllViews();
     signupView.style.display = 'block';
+  });
+  document.getElementById('showForgot').addEventListener('click', (e) => {
+    e.preventDefault();
+    hideAllViews();
+    forgotView.style.display = 'block';
+    document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value || '';
+    document.getElementById('forgotError').textContent = '';
   });
 
   // Avatar upload preview
@@ -256,6 +271,159 @@
       window.location.href = redirectUrl;
     } catch { 
       errEl.textContent = 'Network error. Please try again.'; 
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
+
+  // ===== Password Reset Flow =====
+  let resetEmail = '';
+  let resetCountdownInterval = null;
+
+  function showResetView(email) {
+    resetEmail = email;
+    hideAllViews();
+    resetView.style.display = 'block';
+    document.getElementById('resetEmail').textContent = email;
+    document.getElementById('resetOtpInput').value = '';
+    document.getElementById('resetNewPassword').value = '';
+    document.getElementById('resetError').textContent = '';
+    document.getElementById('resetOtpInput').focus();
+    startResetCountdown();
+  }
+
+  function startResetCountdown() {
+    const timerEl = document.getElementById('resetTimer');
+    const countdownEl = document.getElementById('resetCountdown');
+    const resendBtn = document.getElementById('resetResendBtn');
+    let seconds = 60;
+    timerEl.style.display = '';
+    resendBtn.style.display = 'none';
+    countdownEl.textContent = seconds;
+    clearInterval(resetCountdownInterval);
+    resetCountdownInterval = setInterval(() => {
+      seconds--;
+      countdownEl.textContent = seconds;
+      if (seconds <= 0) {
+        clearInterval(resetCountdownInterval);
+        timerEl.style.display = 'none';
+        resendBtn.style.display = '';
+      }
+    }, 1000);
+  }
+
+  // Forgot password form
+  document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('forgotError');
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    errEl.textContent = '';
+    const email = document.getElementById('forgotEmail').value.trim();
+    if (!email) { errEl.textContent = 'Please enter your email.'; return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errEl.textContent = data.error || 'Something went wrong.';
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+      }
+      btn.disabled = false;
+      btn.textContent = originalText;
+      showResetView(email);
+    } catch {
+      errEl.textContent = 'Network error. Please try again.';
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
+
+  // Back buttons for forgot/reset views
+  document.getElementById('forgotBackBtn').addEventListener('click', () => {
+    hideAllViews();
+    loginView.style.display = 'block';
+  });
+  document.getElementById('resetBackBtn').addEventListener('click', () => {
+    clearInterval(resetCountdownInterval);
+    hideAllViews();
+    loginView.style.display = 'block';
+  });
+
+  // Resend reset OTP
+  document.getElementById('resetResendBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('resetResendBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      const res = await fetch('/api/auth/resend-reset-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('resetError').textContent = data.error || 'Failed to resend.';
+      } else {
+        startResetCountdown();
+      }
+    } catch {
+      document.getElementById('resetError').textContent = 'Network error. Please try again.';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Resend Code';
+  });
+
+  // Reset password form
+  document.getElementById('resetForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('resetError');
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    errEl.textContent = '';
+    const otp = document.getElementById('resetOtpInput').value.trim();
+    const newPassword = document.getElementById('resetNewPassword').value;
+    if (!otp || otp.length !== 6) { errEl.textContent = 'Please enter the 6-digit code.'; return; }
+    if (!newPassword || newPassword.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Resetting…';
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail, otp, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errEl.textContent = data.error || 'Reset failed.';
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+      }
+      // Success – go to login with success message
+      clearInterval(resetCountdownInterval);
+      hideAllViews();
+      loginView.style.display = 'block';
+      document.getElementById('loginError').textContent = '';
+      const successEl = document.createElement('div');
+      successEl.className = 'form-success';
+      successEl.textContent = 'Password reset successfully! You can now log in.';
+      successEl.style.cssText = 'color:#22c55e;font-size:13px;margin-bottom:12px;text-align:center';
+      const loginForm = document.getElementById('loginForm');
+      loginForm.insertBefore(successEl, loginForm.firstChild);
+      document.getElementById('loginEmail').value = resetEmail;
+      setTimeout(() => successEl.remove(), 8000);
+    } catch {
+      errEl.textContent = 'Network error. Please try again.';
       btn.disabled = false;
       btn.textContent = originalText;
     }
