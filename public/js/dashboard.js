@@ -81,11 +81,8 @@
         if (sidebarMyView) sidebarMyView.style.display = 'none';
         if (sidebarSocialView) sidebarSocialView.style.display = '';
         
-        // Load friends and community data in parallel
-        await Promise.all([
-          typeof loadFriends === 'function' ? loadFriends() : Promise.resolve(),
-          typeof initCommunity === 'function' ? initCommunity() : Promise.resolve()
-        ]);
+        // Load social data non-blocking — view appears instantly
+        Promise.all([loadFriends(), initCommunity()]).catch(() => {});
         
         // Handle friend profile page
         if (route.page === 'friend' && route.friendId) {
@@ -223,9 +220,17 @@
       window.location.href = '/auth';
       return;
     }
-    updateAvatar();
+    updateAvatar(); // Show initials immediately
     updateProUI(); // Update sidebar for Pro users
     updateRenewalBanner(); // Check subscription expiry
+
+    // Load avatar in background (non-blocking) — don't delay dashboard render
+    if (currentUser.has_avatar) {
+      api('/api/auth/avatar').then(d => {
+        if (d.avatar) { currentUser.avatar = d.avatar; updateAvatar(); }
+      }).catch(() => {});
+    }
+
     const [, stacksErr] = await Promise.all([
       loadTools(),
       loadStacks().then(() => null).catch(e => e)
@@ -235,6 +240,10 @@
     render();
     // Initialize router after UI is ready
     router.handleRoute();
+
+    // Pre-fetch social data in background so it's instant when user clicks Social
+    // Skip if already on social route — handleRoute() already fired these loads
+    if (currentView !== 'social') prefetchSocialData();
     
     // Check for showPaywall parameter (from extension limit reached)
     const urlParams = new URLSearchParams(window.location.search);
@@ -2017,6 +2026,11 @@
       friendsCache = data.friends || [];
       renderFriends();
     } catch { friendsCache = []; renderFriends(); }
+  }
+
+  function prefetchSocialData() {
+    // Pre-load social data in background so Social tab opens instantly
+    Promise.all([loadFriends(), initCommunity()]).catch(() => {});
   }
 
   function renderFriends() {

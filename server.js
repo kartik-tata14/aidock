@@ -699,7 +699,7 @@ app.delete('/api/auth/account', authMiddleware, async (req, res) => {
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const [result, refResult] = await Promise.all([
-      db.execute("SELECT primary_role, secondary_role, invite_code, tool_limit, avatar, is_pro, subscription_type, subscription_expiry FROM users WHERE id = ?", [req.user.id]),
+      db.execute("SELECT primary_role, secondary_role, invite_code, tool_limit, is_pro, subscription_type, subscription_expiry, CASE WHEN avatar != '' AND avatar IS NOT NULL THEN 1 ELSE 0 END as has_avatar FROM users WHERE id = ?", [req.user.id]),
       db.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", [req.user.id])
     ]);
     const row = result.rows[0] || {};
@@ -726,7 +726,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         invite_code: row.invite_code || '',
         tool_limit: isPro ? 999999 : (row.tool_limit || BASE_TOOL_LIMIT),
         referral_count,
-        avatar: row.avatar || '',
+        has_avatar: row.has_avatar === 1,
         is_pro: isPro,
         subscription_type: row.subscription_type || null,
         subscription_expiry: row.subscription_expiry || null
@@ -763,6 +763,17 @@ app.put('/api/auth/avatar', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Avatar update error:', err);
     res.status(500).json({ error: 'Failed to update avatar.' });
+  }
+});
+
+// Get avatar data (separate from /me to keep auth response lightweight)
+app.get('/api/auth/avatar', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.execute("SELECT avatar FROM users WHERE id = ?", [req.user.id]);
+    res.json({ avatar: result.rows[0]?.avatar || '' });
+  } catch (err) {
+    console.error('Get avatar error:', err);
+    res.status(500).json({ error: 'Failed to fetch avatar.' });
   }
 });
 
@@ -1647,9 +1658,27 @@ app.post('/api/stacks/clone/:slug', authMiddleware, async (req, res) => {
 
 // ===== Community Trending =====
 
-// In-memory cache for trending results (2-day TTL)
+// Two-tier cache: in-memory (fast) + DB (survives cold starts)
 const trendingCache = {};
 const TRENDING_TTL = 2 * 24 * 60 * 60 * 1000; // 2 days
+
+// DB-backed cache helpers
+async function getDbCache(key) {
+  try {
+    const r = await db.execute("SELECT value, expires_at FROM kv_cache WHERE key = ?", [key]);
+    if (r.rows.length === 0) return null;
+    if (new Date(r.rows[0].expires_at) < new Date()) return null;
+    return JSON.parse(r.rows[0].value);
+  } catch { return null; }
+}
+async function setDbCache(key, value, ttlMs) {
+  try {
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+    const json = JSON.stringify(value);
+    await db.execute("DELETE FROM kv_cache WHERE key = ?", [key]);
+    await db.execute("INSERT INTO kv_cache (key, value, expires_at) VALUES (?, ?, ?)", [key, json, expiresAt]);
+  } catch (e) { console.error('Cache write error:', e.message); }
+}
 
 function extractHost(url) {
   try {
@@ -1667,9 +1696,16 @@ app.get('/api/community/trending', authMiddleware, async (req, res) => {
     const role = (req.query.role || '').trim();
     const cacheKey = getCacheKey(category, role);
 
-    // Check cache
+    // Check in-memory cache first (fast path)
     if (trendingCache[cacheKey] && Date.now() - trendingCache[cacheKey].ts < TRENDING_TTL) {
       return res.json(trendingCache[cacheKey].data);
+    }
+
+    // Check DB cache (survives cold starts)
+    const dbCached = await getDbCache('trending:' + cacheKey);
+    if (dbCached) {
+      trendingCache[cacheKey] = { data: dbCached, ts: Date.now() };
+      return res.json(dbCached);
     }
 
     // Build query
@@ -1738,6 +1774,8 @@ app.get('/api/community/trending', authMiddleware, async (req, res) => {
 
     const response = { tools: trending, cached_at: new Date().toISOString() };
     trendingCache[cacheKey] = { data: response, ts: Date.now() };
+    // Persist to DB cache (non-blocking)
+    setDbCache('trending:' + cacheKey, response, TRENDING_TTL).catch(() => {});
     res.json(response);
   } catch (err) {
     console.error('Trending error:', err);
@@ -1752,6 +1790,13 @@ app.get('/api/community/filters', authMiddleware, async (req, res) => {
       return res.json(trendingCache[cacheKey].data);
     }
 
+    // Check DB cache
+    const dbCached = await getDbCache('trending:' + cacheKey);
+    if (dbCached) {
+      trendingCache[cacheKey] = { data: dbCached, ts: Date.now() };
+      return res.json(dbCached);
+    }
+
     const catResult = await db.execute("SELECT DISTINCT category FROM tools WHERE category != '' AND category IS NOT NULL ORDER BY category");
     const categories = catResult.rows.map(r => r.category);
 
@@ -1760,6 +1805,7 @@ app.get('/api/community/filters', authMiddleware, async (req, res) => {
 
     const response = { categories, roles };
     trendingCache[cacheKey] = { data: response, ts: Date.now() };
+    setDbCache('trending:' + cacheKey, response, TRENDING_TTL).catch(() => {});
     res.json(response);
   } catch (err) {
     console.error('Filters error:', err);
@@ -2090,19 +2136,6 @@ async function initSchema() {
   
   try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_invite_code ON users(invite_code)"); } catch {}
   
-  // Migration: Update existing users from old 10-base limit to new 20-base limit
-  // Check if any users have old-system values (10, 12, 14, 16, 18 - values only possible with old base=10)
-  try {
-    const oldUsers = await db.execute("SELECT COUNT(*) as cnt FROM users WHERE tool_limit IN (10, 12, 14, 16, 18) AND (is_pro = 0 OR is_pro IS NULL)");
-    if (oldUsers.rows[0]?.cnt > 0 || oldUsers.rows[0]?.['COUNT(*)'] > 0) {
-      // Migrate: add +10 to all free users with old-system limits (10-20)
-      await db.execute("UPDATE users SET tool_limit = tool_limit + 10 WHERE tool_limit <= 20 AND (is_pro = 0 OR is_pro IS NULL)");
-      console.log('✅ Migrated existing users to new 20-slot base limit');
-    }
-  } catch (e) {
-    // Ignore if error
-  }
-  
   // Referrals table
   await db.execute(`CREATE TABLE IF NOT EXISTS referrals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2142,9 +2175,6 @@ async function initSchema() {
   )`);
   try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ev_email ON email_verifications(email)"); } catch {}
   try { await db.execute("ALTER TABLE email_verifications ADD COLUMN attempts INTEGER DEFAULT 0"); } catch {}
-  
-  // Clean up expired pending verifications (older than 1 hour)
-  try { await db.execute("DELETE FROM email_verifications WHERE expires_at < datetime('now', '-1 hour')"); } catch {}
 
   // Password resets table
   await db.execute(`CREATE TABLE IF NOT EXISTS password_resets (
@@ -2156,13 +2186,13 @@ async function initSchema() {
   )`);
   try { await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pr_email ON password_resets(email)"); } catch {}
   try { await db.execute("ALTER TABLE password_resets ADD COLUMN attempts INTEGER DEFAULT 0"); } catch {}
-  try { await db.execute("DELETE FROM password_resets WHERE expires_at < datetime('now', '-1 hour')"); } catch {}
-  
-  // Backfill invite codes
-  const noCode = await db.execute("SELECT id FROM users WHERE invite_code IS NULL OR invite_code = ''");
-  for (const row of noCode.rows) {
-    await db.execute("UPDATE users SET invite_code = ? WHERE id = ?", [crypto.randomBytes(6).toString('hex'), row.id]);
-  }
+
+  // KV cache table (persists trending/filter caches across cold starts)
+  await db.execute(`CREATE TABLE IF NOT EXISTS kv_cache (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    expires_at DATETIME NOT NULL
+  )`);
   
   // Tools table
   await db.execute(`CREATE TABLE IF NOT EXISTS tools (
@@ -2233,6 +2263,37 @@ async function initSchema() {
     db.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
   ]);
   
+  db.saveToFile();
+
+  // Non-critical cleanup — runs in background after schema is ready
+  schemaCleanup().catch(e => console.warn('Schema cleanup:', e));
+}
+
+async function schemaCleanup() {
+  // Migrate old tool limits (10-base → 20-base)
+  try {
+    const oldUsers = await db.execute("SELECT COUNT(*) as cnt FROM users WHERE tool_limit IN (10, 12, 14, 16, 18) AND (is_pro = 0 OR is_pro IS NULL)");
+    if (oldUsers.rows[0]?.cnt > 0 || oldUsers.rows[0]?.['COUNT(*)'] > 0) {
+      await db.execute("UPDATE users SET tool_limit = tool_limit + 10 WHERE tool_limit <= 20 AND (is_pro = 0 OR is_pro IS NULL)");
+      console.log('✅ Migrated existing users to new 20-slot base limit');
+    }
+  } catch {}
+
+  // Delete expired records
+  await Promise.allSettled([
+    db.execute("DELETE FROM email_verifications WHERE expires_at < datetime('now', '-1 hour')"),
+    db.execute("DELETE FROM password_resets WHERE expires_at < datetime('now', '-1 hour')"),
+    db.execute("DELETE FROM kv_cache WHERE expires_at < datetime('now')")
+  ]);
+
+  // Backfill invite codes
+  try {
+    const noCode = await db.execute("SELECT id FROM users WHERE invite_code IS NULL OR invite_code = ''");
+    for (const row of noCode.rows) {
+      await db.execute("UPDATE users SET invite_code = ? WHERE id = ?", [crypto.randomBytes(6).toString('hex'), row.id]);
+    }
+  } catch {}
+
   db.saveToFile();
 }
 
