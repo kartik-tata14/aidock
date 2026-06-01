@@ -2129,10 +2129,11 @@ app.get('/api/og-image/:slug', async (req, res) => {
     const toolCountResult = await db.execute("SELECT COUNT(*) as cnt FROM stack_tools WHERE stack_id = ?", [row.id]);
     const toolCount = toolCountResult.rows[0]?.cnt || 0;
 
-    const stackName = (row.name || 'Untitled Stack').slice(0, 40);
-    const creatorName = (row.creator_name || 'Unknown').slice(0, 30);
-    const desc = (row.description || `A curated collection of ${toolCount} AI tools`).slice(0, 90);
+    const stackName = (row.name || 'Untitled Stack').slice(0, 36);
+    const creatorName = (row.creator_name || 'Unknown').slice(0, 25);
+    const desc = (row.description || `A curated collection of ${toolCount} AI tools`).slice(0, 100);
     const color = row.color || '#0a84ff';
+    const creatorAvatar = row.creator_avatar || ''; // base64 data URI or empty
 
     // Category colors for tool cards
     const catColors = {
@@ -2149,8 +2150,8 @@ app.get('/api/og-image/:slug', async (req, res) => {
     const interFont = getInterFont();
     const interBold = getInterBold();
 
-    // Build tool card elements (show up to 4 in a grid)
-    const displayTools = tools.slice(0, 4);
+    // Build tool card elements (show up to 5)
+    const displayTools = tools.slice(0, 5);
     const toolCards = displayTools.map(tool => ({
       type: 'div',
       props: {
@@ -2158,25 +2159,25 @@ app.get('/api/og-image/:slug', async (req, res) => {
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          padding: '12px 16px',
-          borderRadius: '12px',
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          width: '260px',
+          padding: '14px 18px',
+          borderRadius: '14px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          backdropFilter: 'blur(8px)',
         },
         children: [
           {
             type: 'div',
             props: {
               style: {
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                background: getCatColor(tool.category),
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background: `linear-gradient(135deg, ${getCatColor(tool.category)}, ${getCatColor(tool.category)}88)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '14px',
+                fontSize: '15px',
                 color: 'white',
                 fontWeight: 700,
                 flexShrink: 0,
@@ -2187,9 +2188,9 @@ app.get('/api/og-image/:slug', async (req, res) => {
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+              style: { display: 'flex', flexDirection: 'column', gap: '2px' },
               children: [
-                { type: 'div', props: { style: { fontSize: '14px', fontWeight: 700, color: '#e4e4e7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: (tool.name || 'Tool').slice(0, 22) } },
+                { type: 'div', props: { style: { fontSize: '14px', fontWeight: 700, color: '#f4f4f5' }, children: (tool.name || 'Tool').slice(0, 20) } },
                 { type: 'div', props: { style: { fontSize: '11px', color: '#71717a' }, children: tool.category || 'Tool' } },
               ],
             },
@@ -2198,8 +2199,8 @@ app.get('/api/og-image/:slug', async (req, res) => {
       },
     }));
 
-    // If there are more tools than displayed, add a "+N more" card
-    if (toolCount > 4) {
+    // "+N more" indicator
+    if (toolCount > 5) {
       toolCards.push({
         type: 'div',
         props: {
@@ -2207,18 +2208,53 @@ app.get('/api/og-image/:slug', async (req, res) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px dashed rgba(255,255,255,0.12)',
-            width: '260px',
-            fontSize: '14px',
-            color: '#71717a',
+            padding: '12px 18px',
+            borderRadius: '14px',
+            border: '1px dashed rgba(255,255,255,0.1)',
+            fontSize: '13px',
+            color: '#52525b',
           },
-          children: `+${toolCount - 4} more tool${toolCount - 4 !== 1 ? 's' : ''}`,
+          children: `+${toolCount - 5} more`,
         },
       });
     }
+
+    // Creator avatar element - use actual image if available, else initial
+    const avatarElement = creatorAvatar && creatorAvatar.startsWith('data:image/')
+      ? {
+          type: 'img',
+          props: {
+            src: creatorAvatar,
+            width: 52,
+            height: 52,
+            style: {
+              width: '52px',
+              height: '52px',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: `2px solid ${color}`,
+            },
+          },
+        }
+      : {
+          type: 'div',
+          props: {
+            style: {
+              width: '52px',
+              height: '52px',
+              borderRadius: '50%',
+              background: `linear-gradient(135deg, ${color}, #8b5cf6)`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '22px',
+              color: 'white',
+              fontWeight: 700,
+              border: '2px solid rgba(255,255,255,0.1)',
+            },
+            children: creatorName.charAt(0).toUpperCase(),
+          },
+        };
 
     const markup = {
       type: 'div',
@@ -2233,176 +2269,198 @@ app.get('/api/og-image/:slug', async (req, res) => {
           overflow: 'hidden',
         },
         children: [
-          // Background gradient orb (decorative)
+          // Decorative gradient mesh
           {
             type: 'div',
             props: {
               style: {
                 position: 'absolute',
-                top: '-100px',
-                right: '-100px',
+                top: '-200px',
+                right: '100px',
+                width: '600px',
+                height: '600px',
+                borderRadius: '50%',
+                background: `radial-gradient(circle, ${color}18 0%, transparent 60%)`,
+              },
+            },
+          },
+          {
+            type: 'div',
+            props: {
+              style: {
+                position: 'absolute',
+                bottom: '-200px',
+                left: '200px',
                 width: '500px',
                 height: '500px',
                 borderRadius: '50%',
-                background: `radial-gradient(circle, ${color}22 0%, transparent 70%)`,
+                background: 'radial-gradient(circle, #8b5cf618 0%, transparent 60%)',
               },
             },
           },
-          // Bottom-left glow
+          // Subtle grid pattern overlay (via border lines)
           {
             type: 'div',
             props: {
               style: {
                 position: 'absolute',
-                bottom: '-150px',
-                left: '-100px',
-                width: '400px',
-                height: '400px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, #8b5cf622 0%, transparent 70%)',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: `linear-gradient(90deg, transparent, ${color}, #8b5cf6, transparent)`,
               },
             },
           },
-          // Left content panel
+          // Left content panel (60% width)
           {
             type: 'div',
             props: {
               style: {
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'center',
-                padding: '56px',
-                width: '580px',
+                justifyContent: 'space-between',
+                padding: '52px 48px',
+                width: '620px',
                 position: 'relative',
               },
               children: [
-                // Top accent line
+                // Top section: Stack info
                 {
                   type: 'div',
                   props: {
-                    style: {
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: '4px',
-                      background: `linear-gradient(90deg, ${color}, #8b5cf6, transparent)`,
-                    },
-                  },
-                },
-                // Stack icon + name
-                {
-                  type: 'div',
-                  props: {
-                    style: { display: 'flex', alignItems: 'center', gap: '18px' },
+                    style: { display: 'flex', flexDirection: 'column' },
                     children: [
+                      // Stack icon badge + name
                       {
                         type: 'div',
                         props: {
-                          style: {
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '14px',
-                            background: `linear-gradient(135deg, ${color}, ${color}99)`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '24px',
-                            color: 'white',
-                            fontWeight: 700,
-                            boxShadow: `0 8px 24px ${color}44`,
-                          },
-                          children: stackName.charAt(0).toUpperCase(),
-                        },
-                      },
-                      {
-                        type: 'div',
-                        props: {
-                          style: { fontSize: '36px', fontWeight: 700, color: '#fafafa', lineHeight: 1.1 },
-                          children: stackName,
-                        },
-                      },
-                    ],
-                  },
-                },
-                // Description
-                {
-                  type: 'div',
-                  props: {
-                    style: { fontSize: '18px', color: '#a1a1aa', marginTop: '16px', lineHeight: 1.5 },
-                    children: desc,
-                  },
-                },
-                // Creator + stats row
-                {
-                  type: 'div',
-                  props: {
-                    style: { display: 'flex', alignItems: 'center', gap: '20px', marginTop: '32px' },
-                    children: [
-                      // Creator avatar
-                      {
-                        type: 'div',
-                        props: {
-                          style: { display: 'flex', alignItems: 'center', gap: '10px' },
+                          style: { display: 'flex', alignItems: 'center', gap: '16px' },
                           children: [
                             {
                               type: 'div',
                               props: {
                                 style: {
-                                  width: '32px',
-                                  height: '32px',
-                                  borderRadius: '50%',
-                                  background: `linear-gradient(135deg, ${color}, #8b5cf6)`,
+                                  width: '52px',
+                                  height: '52px',
+                                  borderRadius: '14px',
+                                  background: `linear-gradient(135deg, ${color}, ${color}88)`,
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  fontSize: '14px',
+                                  fontSize: '22px',
                                   color: 'white',
                                   fontWeight: 700,
                                 },
-                                children: creatorName.charAt(0).toUpperCase(),
+                                children: stackName.charAt(0).toUpperCase(),
                               },
                             },
-                            { type: 'div', props: { style: { fontSize: '15px', color: '#d4d4d8', fontWeight: 700 }, children: creatorName } },
+                            {
+                              type: 'div',
+                              props: {
+                                style: { display: 'flex', flexDirection: 'column', gap: '2px' },
+                                children: [
+                                  { type: 'div', props: { style: { fontSize: '12px', color: '#52525b', fontWeight: 400, textTransform: 'uppercase', letterSpacing: '0.05em' }, children: 'AI STACK' } },
+                                  { type: 'div', props: { style: { fontSize: '32px', fontWeight: 700, color: '#fafafa', lineHeight: 1.1 }, children: stackName } },
+                                ],
+                              },
+                            },
                           ],
                         },
                       },
-                      // Divider
-                      { type: 'div', props: { style: { width: '1px', height: '20px', background: 'rgba(255,255,255,0.1)' } } },
-                      // Tool count
-                      { type: 'div', props: { style: { fontSize: '14px', color: '#71717a' }, children: `${toolCount} tool${toolCount !== 1 ? 's' : ''}` } },
-                    ],
-                  },
-                },
-                // Footer branding
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      position: 'absolute',
-                      bottom: '32px',
-                      left: '56px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                    },
-                    children: [
+                      // Description
                       {
                         type: 'div',
                         props: {
-                          style: { width: '24px', height: '24px', borderRadius: '6px', background: `linear-gradient(135deg, ${color}, #8b5cf6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'white', fontWeight: 700 },
-                          children: 'A',
+                          style: { fontSize: '17px', color: '#a1a1aa', marginTop: '18px', lineHeight: 1.5, maxWidth: '500px' },
+                          children: desc,
                         },
                       },
-                      { type: 'div', props: { style: { fontSize: '14px', fontWeight: 700, color: '#a1a1aa' }, children: 'AIDock' } },
-                      { type: 'div', props: { style: { fontSize: '12px', color: '#52525b', marginLeft: '4px' }, children: 'aidock-beta.vercel.app' } },
+                      // Stats row
+                      {
+                        type: 'div',
+                        props: {
+                          style: { display: 'flex', gap: '12px', marginTop: '24px' },
+                          children: [
+                            {
+                              type: 'div',
+                              props: {
+                                style: { padding: '6px 14px', borderRadius: '8px', background: `${color}15`, border: `1px solid ${color}30`, fontSize: '13px', color: color, fontWeight: 700 },
+                                children: `${toolCount} tool${toolCount !== 1 ? 's' : ''}`,
+                              },
+                            },
+                            {
+                              type: 'div',
+                              props: {
+                                style: { padding: '6px 14px', borderRadius: '8px', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', fontSize: '13px', color: '#a78bfa', fontWeight: 700 },
+                                children: 'Curated',
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+                // Bottom section: Creator info + branding
+                {
+                  type: 'div',
+                  props: {
+                    style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '20px' },
+                    children: [
+                      // Creator
+                      {
+                        type: 'div',
+                        props: {
+                          style: { display: 'flex', alignItems: 'center', gap: '14px' },
+                          children: [
+                            avatarElement,
+                            {
+                              type: 'div',
+                              props: {
+                                style: { display: 'flex', flexDirection: 'column', gap: '2px' },
+                                children: [
+                                  { type: 'div', props: { style: { fontSize: '11px', color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.05em' }, children: 'SHARED BY' } },
+                                  { type: 'div', props: { style: { fontSize: '17px', fontWeight: 700, color: '#e4e4e7' }, children: creatorName } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                      // AIDock branding
+                      {
+                        type: 'div',
+                        props: {
+                          style: { display: 'flex', alignItems: 'center', gap: '8px' },
+                          children: [
+                            {
+                              type: 'div',
+                              props: {
+                                style: { width: '28px', height: '28px', borderRadius: '8px', background: `linear-gradient(135deg, ${color}, #8b5cf6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: 'white', fontWeight: 700 },
+                                children: 'A',
+                              },
+                            },
+                            {
+                              type: 'div',
+                              props: {
+                                style: { display: 'flex', flexDirection: 'column' },
+                                children: [
+                                  { type: 'div', props: { style: { fontSize: '14px', fontWeight: 700, color: '#a1a1aa' }, children: 'AIDock' } },
+                                  { type: 'div', props: { style: { fontSize: '10px', color: '#3f3f46' }, children: 'aidock-beta.vercel.app' } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
                     ],
                   },
                 },
               ],
             },
           },
-          // Right panel — tool cards preview
+          // Right panel — tool cards with glass panel
           {
             type: 'div',
             props: {
@@ -2410,18 +2468,16 @@ app.get('/api/og-image/:slug', async (req, res) => {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
-                gap: '10px',
-                padding: '40px 40px 40px 0',
+                gap: '8px',
+                padding: '44px 44px 44px 0',
                 flexGrow: 1,
-                flexWrap: 'wrap',
-                maxHeight: '100%',
               },
               children: toolCards.length > 0 ? toolCards : [
                 {
                   type: 'div',
                   props: {
-                    style: { fontSize: '14px', color: '#52525b' },
-                    children: 'No tools yet',
+                    style: { padding: '20px', borderRadius: '14px', border: '1px dashed rgba(255,255,255,0.08)', fontSize: '14px', color: '#3f3f46', textAlign: 'center' },
+                    children: 'Add tools to your stack',
                   },
                 },
               ],
@@ -2441,7 +2497,10 @@ app.get('/api/og-image/:slug', async (req, res) => {
     });
 
     const sharp = require('sharp');
-    const png = await sharp(Buffer.from(svg)).png().toBuffer();
+    const png = await sharp(Buffer.from(svg), { density: 150 })
+      .resize(1200, 630)
+      .png({ compressionLevel: 6 })
+      .toBuffer();
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
     res.send(png);
