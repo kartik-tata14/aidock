@@ -2093,7 +2093,22 @@ app.get('/api/extension/download', async (req, res) => {
   }
 });
 
-// ===== OG Image Generation =====
+// ===== OG Image Generation (satori + sharp) =====
+let _interFontCache = null;
+function getInterFont() {
+  if (!_interFontCache) {
+    _interFontCache = require('fs').readFileSync(require('path').join(__dirname, 'node_modules/@fontsource/inter/files/inter-latin-400-normal.woff'));
+  }
+  return _interFontCache;
+}
+let _interBoldCache = null;
+function getInterBold() {
+  if (!_interBoldCache) {
+    _interBoldCache = require('fs').readFileSync(require('path').join(__dirname, 'node_modules/@fontsource/inter/files/inter-latin-700-normal.woff'));
+  }
+  return _interBoldCache;
+}
+
 app.get('/api/og-image/:slug', async (req, res) => {
   try {
     await ensureDb();
@@ -2109,40 +2124,191 @@ app.get('/api/og-image/:slug', async (req, res) => {
 
     const stackName = (row.name || 'Untitled Stack').slice(0, 50);
     const creatorName = (row.creator_name || 'Unknown').slice(0, 30);
-    const desc = (row.description || '').slice(0, 80);
-    const icon = row.icon || '📂';
+    const desc = (row.description || `A curated collection of ${toolCount} AI tools`).slice(0, 80);
     const color = row.color || '#0a84ff';
 
-    // Generate SVG → PNG via sharp
-    const svg = `<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#0f0f11"/>
-          <stop offset="100%" style="stop-color:#1a1a2e"/>
-        </linearGradient>
-        <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" style="stop-color:${color}"/>
-          <stop offset="100%" style="stop-color:#8b5cf6"/>
-        </linearGradient>
-      </defs>
-      <rect width="1200" height="630" fill="url(#bg)"/>
-      <rect x="0" y="0" width="1200" height="6" fill="url(#accent)"/>
-      <rect x="60" y="80" width="80" height="80" rx="20" fill="${color}" opacity="0.15"/>
-      <text x="100" y="135" font-size="44" text-anchor="middle" font-family="Arial,sans-serif">${icon}</text>
-      <text x="160" y="120" font-size="42" font-weight="bold" fill="#f5f5f7" font-family="Arial,sans-serif">${escXml(stackName)}</text>
-      <text x="62" y="200" font-size="22" fill="#a1a1aa" font-family="Arial,sans-serif">${escXml(desc)}</text>
-      <circle cx="90" cy="290" r="28" fill="${color}" opacity="0.8"/>
-      <text x="90" y="298" font-size="20" text-anchor="middle" fill="white" font-weight="bold" font-family="Arial,sans-serif">${escXml(creatorName.charAt(0).toUpperCase())}</text>
-      <text x="132" y="282" font-size="14" fill="#71717a" font-family="Arial,sans-serif">Created by</text>
-      <text x="132" y="306" font-size="20" font-weight="bold" fill="#f5f5f7" font-family="Arial,sans-serif">${escXml(creatorName)}</text>
-      <rect x="60" y="360" width="200" height="44" rx="12" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-      <text x="90" y="388" font-size="15" fill="#a1a1aa" font-family="Arial,sans-serif">🛠️  ${toolCount} tool${toolCount !== 1 ? 's' : ''}</text>
-      <rect x="280" y="360" width="200" height="44" rx="12" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-      <text x="310" y="388" font-size="15" fill="#a1a1aa" font-family="Arial,sans-serif">📦  Curated Stack</text>
-      <rect x="60" y="540" width="1080" height="1" fill="rgba(255,255,255,0.08)"/>
-      <text x="62" y="585" font-size="18" font-weight="bold" fill="#f5f5f7" font-family="Arial,sans-serif">⬡ AIDock</text>
-      <text x="1138" y="585" font-size="14" fill="#71717a" text-anchor="end" font-family="Arial,sans-serif">aidock-beta.vercel.app</text>
-    </svg>`;
+    const satori = require('satori').default;
+    const interFont = getInterFont();
+    const interBold = getInterBold();
+
+    // Satori uses a React-like virtual DOM (plain objects with type, props, children)
+    const markup = {
+      type: 'div',
+      props: {
+        style: {
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'linear-gradient(135deg, #0f0f11 0%, #1a1a2e 100%)',
+          padding: '60px',
+          fontFamily: 'Inter',
+          position: 'relative',
+        },
+        children: [
+          // Top accent bar
+          {
+            type: 'div',
+            props: {
+              style: {
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '6px',
+                background: `linear-gradient(90deg, ${color}, #8b5cf6)`,
+              },
+            },
+          },
+          // Stack icon + name row
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', alignItems: 'center', gap: '20px' },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    style: {
+                      width: '72px',
+                      height: '72px',
+                      borderRadius: '16px',
+                      background: color,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '32px',
+                      color: 'white',
+                      fontWeight: 700,
+                    },
+                    children: stackName.charAt(0).toUpperCase(),
+                  },
+                },
+                {
+                  type: 'div',
+                  props: {
+                    style: { fontSize: '44px', fontWeight: 700, color: '#f5f5f7', flexShrink: 1 },
+                    children: stackName,
+                  },
+                },
+              ],
+            },
+          },
+          // Description
+          {
+            type: 'div',
+            props: {
+              style: { fontSize: '22px', color: '#a1a1aa', marginTop: '20px', lineHeight: 1.4 },
+              children: desc,
+            },
+          },
+          // Creator row
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', alignItems: 'center', gap: '16px', marginTop: '40px' },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    style: {
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      background: color,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '20px',
+                      color: 'white',
+                      fontWeight: 700,
+                    },
+                    children: creatorName.charAt(0).toUpperCase(),
+                  },
+                },
+                {
+                  type: 'div',
+                  props: {
+                    style: { display: 'flex', flexDirection: 'column' },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: '14px', color: '#71717a' }, children: 'Created by' } },
+                      { type: 'div', props: { style: { fontSize: '20px', fontWeight: 700, color: '#f5f5f7' }, children: creatorName } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          // Tool count badges
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', gap: '16px', marginTop: '36px' },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    style: {
+                      padding: '10px 24px',
+                      borderRadius: '12px',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      fontSize: '15px',
+                      color: '#a1a1aa',
+                    },
+                    children: `${toolCount} tool${toolCount !== 1 ? 's' : ''} in stack`,
+                  },
+                },
+                {
+                  type: 'div',
+                  props: {
+                    style: {
+                      padding: '10px 24px',
+                      borderRadius: '12px',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      fontSize: '15px',
+                      color: '#a1a1aa',
+                    },
+                    children: 'Curated Stack',
+                  },
+                },
+              ],
+            },
+          },
+          // Footer
+          {
+            type: 'div',
+            props: {
+              style: {
+                position: 'absolute',
+                bottom: '40px',
+                left: '60px',
+                right: '60px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                paddingTop: '20px',
+              },
+              children: [
+                { type: 'div', props: { style: { fontSize: '20px', fontWeight: 700, color: '#f5f5f7' }, children: 'AIDock' } },
+                { type: 'div', props: { style: { fontSize: '14px', color: '#71717a' }, children: 'aidock-beta.vercel.app' } },
+              ],
+            },
+          },
+        ],
+      },
+    };
+
+    const svg = await satori(markup, {
+      width: 1200,
+      height: 630,
+      fonts: [
+        { name: 'Inter', data: interFont, weight: 400, style: 'normal' },
+        { name: 'Inter', data: interBold, weight: 700, style: 'normal' },
+      ],
+    });
 
     const sharp = require('sharp');
     const png = await sharp(Buffer.from(svg)).png().toBuffer();
@@ -2154,10 +2320,6 @@ app.get('/api/og-image/:slug', async (req, res) => {
     res.status(500).send('Failed to generate image');
   }
 });
-
-function escXml(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-}
 
 // ===== Page routes =====
 app.get('/auth', (req, res) => res.sendFile(path.join(__dirname, 'public', 'auth.html')));
