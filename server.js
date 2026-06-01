@@ -2093,12 +2093,117 @@ app.get('/api/extension/download', async (req, res) => {
   }
 });
 
+// ===== OG Image Generation =====
+app.get('/api/og-image/:slug', async (req, res) => {
+  try {
+    await ensureDb();
+    const slug = req.params.slug;
+    const result = await db.execute(
+      "SELECT s.name, s.description, s.icon, s.color, u.name as creator_name, u.avatar as creator_avatar FROM stacks s JOIN users u ON s.user_id = u.id WHERE s.share_slug = ?",
+      [slug]
+    );
+    if (result.rows.length === 0) return res.status(404).send('Not found');
+    const row = result.rows[0];
+    const toolCountResult = await db.execute("SELECT COUNT(*) as cnt FROM stack_tools WHERE stack_id = (SELECT id FROM stacks WHERE share_slug = ?)", [slug]);
+    const toolCount = toolCountResult.rows[0]?.cnt || 0;
+
+    const stackName = (row.name || 'Untitled Stack').slice(0, 50);
+    const creatorName = (row.creator_name || 'Unknown').slice(0, 30);
+    const desc = (row.description || '').slice(0, 80);
+    const icon = row.icon || '📂';
+    const color = row.color || '#0a84ff';
+
+    // Generate SVG → PNG via sharp
+    const svg = `<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#0f0f11"/>
+          <stop offset="100%" style="stop-color:#1a1a2e"/>
+        </linearGradient>
+        <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:${color}"/>
+          <stop offset="100%" style="stop-color:#8b5cf6"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="630" fill="url(#bg)"/>
+      <rect x="0" y="0" width="1200" height="6" fill="url(#accent)"/>
+      <rect x="60" y="80" width="80" height="80" rx="20" fill="${color}" opacity="0.15"/>
+      <text x="100" y="135" font-size="44" text-anchor="middle" font-family="Arial,sans-serif">${icon}</text>
+      <text x="160" y="120" font-size="42" font-weight="bold" fill="#f5f5f7" font-family="Arial,sans-serif">${escXml(stackName)}</text>
+      <text x="62" y="200" font-size="22" fill="#a1a1aa" font-family="Arial,sans-serif">${escXml(desc)}</text>
+      <circle cx="90" cy="290" r="28" fill="${color}" opacity="0.8"/>
+      <text x="90" y="298" font-size="20" text-anchor="middle" fill="white" font-weight="bold" font-family="Arial,sans-serif">${escXml(creatorName.charAt(0).toUpperCase())}</text>
+      <text x="132" y="282" font-size="14" fill="#71717a" font-family="Arial,sans-serif">Created by</text>
+      <text x="132" y="306" font-size="20" font-weight="bold" fill="#f5f5f7" font-family="Arial,sans-serif">${escXml(creatorName)}</text>
+      <rect x="60" y="360" width="200" height="44" rx="12" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <text x="90" y="388" font-size="15" fill="#a1a1aa" font-family="Arial,sans-serif">🛠️  ${toolCount} tool${toolCount !== 1 ? 's' : ''}</text>
+      <rect x="280" y="360" width="200" height="44" rx="12" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <text x="310" y="388" font-size="15" fill="#a1a1aa" font-family="Arial,sans-serif">📦  Curated Stack</text>
+      <rect x="60" y="540" width="1080" height="1" fill="rgba(255,255,255,0.08)"/>
+      <text x="62" y="585" font-size="18" font-weight="bold" fill="#f5f5f7" font-family="Arial,sans-serif">⬡ AIDock</text>
+      <text x="1138" y="585" font-size="14" fill="#71717a" text-anchor="end" font-family="Arial,sans-serif">aidock-beta.vercel.app</text>
+    </svg>`;
+
+    const sharp = require('sharp');
+    const png = await sharp(Buffer.from(svg)).png().toBuffer();
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+    res.send(png);
+  } catch (err) {
+    console.error('OG image error:', err);
+    res.status(500).send('Failed to generate image');
+  }
+});
+
+function escXml(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
 // ===== Page routes =====
 app.get('/auth', (req, res) => res.sendFile(path.join(__dirname, 'public', 'auth.html')));
 app.get('/join/:code', (req, res) => res.sendFile(path.join(__dirname, 'public', 'invite.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/dashboard/*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
-app.get('/stack/:slug', (req, res) => res.sendFile(path.join(__dirname, 'public', 'shared-stack.html')));
+app.get('/stack/:slug', async (req, res) => {
+  try {
+    await ensureDb();
+    const slug = req.params.slug;
+    const result = await db.execute("SELECT s.name, s.description, s.icon, s.color, s.views, s.clones, u.name as creator_name FROM stacks s JOIN users u ON s.user_id = u.id WHERE s.share_slug = ?", [slug]);
+    const row = result.rows[0];
+    const toolCount = row ? (await db.execute("SELECT COUNT(*) as cnt FROM stack_tools WHERE stack_id = (SELECT id FROM stacks WHERE share_slug = ?)", [slug])).rows[0]?.cnt || 0 : 0;
+
+    // Build OG meta tags
+    const ogTitle = row ? `${row.name} — by ${row.creator_name}` : 'Shared Stack — AIDock';
+    const ogDesc = row
+      ? (row.description || `A curated collection of ${toolCount} AI tool${toolCount !== 1 ? 's' : ''} shared on AIDock.`)
+      : 'This stack may have been unshared or deleted.';
+    const ogUrl = `https://aidock-beta.vercel.app/stack/${slug}`;
+    const ogImage = `https://aidock-beta.vercel.app/api/og-image/${slug}`;
+
+    const html = require('fs').readFileSync(path.join(__dirname, 'public', 'shared-stack.html'), 'utf8');
+    const metaTags = `
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="${ogTitle.replace(/"/g, '&quot;')}">
+    <meta property="og:description" content="${ogDesc.replace(/"/g, '&quot;')}">
+    <meta property="og:url" content="${ogUrl}">
+    <meta property="og:image" content="${ogImage}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="AIDock">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${ogTitle.replace(/"/g, '&quot;')}">
+    <meta name="twitter:description" content="${ogDesc.replace(/"/g, '&quot;')}">
+    <meta name="twitter:image" content="${ogImage}">`;
+
+    const injected = html
+      .replace('<title>Shared Stack — AIDock</title>', `<title>${ogTitle.replace(/</g, '&lt;')}</title>${metaTags}`);
+    res.setHeader('Content-Type', 'text/html');
+    res.send(injected);
+  } catch (err) {
+    console.error('Stack page error:', err);
+    res.sendFile(path.join(__dirname, 'public', 'shared-stack.html'));
+  }
+});
 
 // ===== Initialize database schema =====
 async function initSchema() {
