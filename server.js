@@ -2114,24 +2114,112 @@ app.get('/api/og-image/:slug', async (req, res) => {
     await ensureDb();
     const slug = req.params.slug;
     const result = await db.execute(
-      "SELECT s.name, s.description, s.icon, s.color, u.name as creator_name, u.avatar as creator_avatar FROM stacks s JOIN users u ON s.user_id = u.id WHERE s.share_slug = ?",
+      "SELECT s.id, s.name, s.description, s.icon, s.color, u.name as creator_name, u.avatar as creator_avatar FROM stacks s JOIN users u ON s.user_id = u.id WHERE s.share_slug = ?",
       [slug]
     );
     if (result.rows.length === 0) return res.status(404).send('Not found');
     const row = result.rows[0];
-    const toolCountResult = await db.execute("SELECT COUNT(*) as cnt FROM stack_tools WHERE stack_id = (SELECT id FROM stacks WHERE share_slug = ?)", [slug]);
+
+    // Fetch actual tools in the stack (up to 6 for preview)
+    const toolsResult = await db.execute(
+      "SELECT t.name, t.category FROM stack_tools st JOIN tools t ON st.tool_id = t.id WHERE st.stack_id = ? ORDER BY st.sort_order, st.added_at LIMIT 6",
+      [row.id]
+    );
+    const tools = toolsResult.rows || [];
+    const toolCountResult = await db.execute("SELECT COUNT(*) as cnt FROM stack_tools WHERE stack_id = ?", [row.id]);
     const toolCount = toolCountResult.rows[0]?.cnt || 0;
 
-    const stackName = (row.name || 'Untitled Stack').slice(0, 50);
+    const stackName = (row.name || 'Untitled Stack').slice(0, 40);
     const creatorName = (row.creator_name || 'Unknown').slice(0, 30);
-    const desc = (row.description || `A curated collection of ${toolCount} AI tools`).slice(0, 80);
+    const desc = (row.description || `A curated collection of ${toolCount} AI tools`).slice(0, 90);
     const color = row.color || '#0a84ff';
+
+    // Category colors for tool cards
+    const catColors = {
+      'AI Assistant': '#8b5cf6', 'Writing': '#ec4899', 'Coding': '#10b981',
+      'Image': '#f59e0b', 'Video': '#ef4444', 'Audio': '#06b6d4',
+      'Productivity': '#3b82f6', 'Research': '#6366f1', 'Design': '#f97316',
+      'Marketing': '#14b8a6', 'Data': '#a855f7', 'Other': '#6b7280',
+    };
+    function getCatColor(cat) {
+      return catColors[cat] || catColors['Other'];
+    }
 
     const satori = require('satori').default;
     const interFont = getInterFont();
     const interBold = getInterBold();
 
-    // Satori uses a React-like virtual DOM (plain objects with type, props, children)
+    // Build tool card elements (show up to 4 in a grid)
+    const displayTools = tools.slice(0, 4);
+    const toolCards = displayTools.map(tool => ({
+      type: 'div',
+      props: {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '12px 16px',
+          borderRadius: '12px',
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          width: '260px',
+        },
+        children: [
+          {
+            type: 'div',
+            props: {
+              style: {
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                background: getCatColor(tool.category),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                color: 'white',
+                fontWeight: 700,
+                flexShrink: 0,
+              },
+              children: (tool.name || 'T').charAt(0).toUpperCase(),
+            },
+          },
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+              children: [
+                { type: 'div', props: { style: { fontSize: '14px', fontWeight: 700, color: '#e4e4e7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: (tool.name || 'Tool').slice(0, 22) } },
+                { type: 'div', props: { style: { fontSize: '11px', color: '#71717a' }, children: tool.category || 'Tool' } },
+              ],
+            },
+          },
+        ],
+      },
+    }));
+
+    // If there are more tools than displayed, add a "+N more" card
+    if (toolCount > 4) {
+      toolCards.push({
+        type: 'div',
+        props: {
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px dashed rgba(255,255,255,0.12)',
+            width: '260px',
+            fontSize: '14px',
+            color: '#71717a',
+          },
+          children: `+${toolCount - 4} more tool${toolCount - 4 !== 1 ? 's' : ''}`,
+        },
+      });
+    }
+
     const markup = {
       type: 'div',
       props: {
@@ -2139,161 +2227,203 @@ app.get('/api/og-image/:slug', async (req, res) => {
           width: '100%',
           height: '100%',
           display: 'flex',
-          flexDirection: 'column',
-          background: 'linear-gradient(135deg, #0f0f11 0%, #1a1a2e 100%)',
-          padding: '60px',
+          background: '#09090b',
           fontFamily: 'Inter',
           position: 'relative',
+          overflow: 'hidden',
         },
         children: [
-          // Top accent bar
+          // Background gradient orb (decorative)
           {
             type: 'div',
             props: {
               style: {
                 position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '6px',
-                background: `linear-gradient(90deg, ${color}, #8b5cf6)`,
+                top: '-100px',
+                right: '-100px',
+                width: '500px',
+                height: '500px',
+                borderRadius: '50%',
+                background: `radial-gradient(circle, ${color}22 0%, transparent 70%)`,
               },
             },
           },
-          // Stack icon + name row
+          // Bottom-left glow
           {
             type: 'div',
             props: {
-              style: { display: 'flex', alignItems: 'center', gap: '20px' },
+              style: {
+                position: 'absolute',
+                bottom: '-150px',
+                left: '-100px',
+                width: '400px',
+                height: '400px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, #8b5cf622 0%, transparent 70%)',
+              },
+            },
+          },
+          // Left content panel
+          {
+            type: 'div',
+            props: {
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                padding: '56px',
+                width: '580px',
+                position: 'relative',
+              },
               children: [
+                // Top accent line
                 {
                   type: 'div',
                   props: {
                     style: {
-                      width: '72px',
-                      height: '72px',
-                      borderRadius: '16px',
-                      background: color,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '32px',
-                      color: 'white',
-                      fontWeight: 700,
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: `linear-gradient(90deg, ${color}, #8b5cf6, transparent)`,
                     },
-                    children: stackName.charAt(0).toUpperCase(),
                   },
                 },
+                // Stack icon + name
                 {
                   type: 'div',
                   props: {
-                    style: { fontSize: '44px', fontWeight: 700, color: '#f5f5f7', flexShrink: 1 },
-                    children: stackName,
-                  },
-                },
-              ],
-            },
-          },
-          // Description
-          {
-            type: 'div',
-            props: {
-              style: { fontSize: '22px', color: '#a1a1aa', marginTop: '20px', lineHeight: 1.4 },
-              children: desc,
-            },
-          },
-          // Creator row
-          {
-            type: 'div',
-            props: {
-              style: { display: 'flex', alignItems: 'center', gap: '16px', marginTop: '40px' },
-              children: [
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '50%',
-                      background: color,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '20px',
-                      color: 'white',
-                      fontWeight: 700,
-                    },
-                    children: creatorName.charAt(0).toUpperCase(),
-                  },
-                },
-                {
-                  type: 'div',
-                  props: {
-                    style: { display: 'flex', flexDirection: 'column' },
+                    style: { display: 'flex', alignItems: 'center', gap: '18px' },
                     children: [
-                      { type: 'div', props: { style: { fontSize: '14px', color: '#71717a' }, children: 'Created by' } },
-                      { type: 'div', props: { style: { fontSize: '20px', fontWeight: 700, color: '#f5f5f7' }, children: creatorName } },
+                      {
+                        type: 'div',
+                        props: {
+                          style: {
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '14px',
+                            background: `linear-gradient(135deg, ${color}, ${color}99)`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '24px',
+                            color: 'white',
+                            fontWeight: 700,
+                            boxShadow: `0 8px 24px ${color}44`,
+                          },
+                          children: stackName.charAt(0).toUpperCase(),
+                        },
+                      },
+                      {
+                        type: 'div',
+                        props: {
+                          style: { fontSize: '36px', fontWeight: 700, color: '#fafafa', lineHeight: 1.1 },
+                          children: stackName,
+                        },
+                      },
+                    ],
+                  },
+                },
+                // Description
+                {
+                  type: 'div',
+                  props: {
+                    style: { fontSize: '18px', color: '#a1a1aa', marginTop: '16px', lineHeight: 1.5 },
+                    children: desc,
+                  },
+                },
+                // Creator + stats row
+                {
+                  type: 'div',
+                  props: {
+                    style: { display: 'flex', alignItems: 'center', gap: '20px', marginTop: '32px' },
+                    children: [
+                      // Creator avatar
+                      {
+                        type: 'div',
+                        props: {
+                          style: { display: 'flex', alignItems: 'center', gap: '10px' },
+                          children: [
+                            {
+                              type: 'div',
+                              props: {
+                                style: {
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '50%',
+                                  background: `linear-gradient(135deg, ${color}, #8b5cf6)`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '14px',
+                                  color: 'white',
+                                  fontWeight: 700,
+                                },
+                                children: creatorName.charAt(0).toUpperCase(),
+                              },
+                            },
+                            { type: 'div', props: { style: { fontSize: '15px', color: '#d4d4d8', fontWeight: 700 }, children: creatorName } },
+                          ],
+                        },
+                      },
+                      // Divider
+                      { type: 'div', props: { style: { width: '1px', height: '20px', background: 'rgba(255,255,255,0.1)' } } },
+                      // Tool count
+                      { type: 'div', props: { style: { fontSize: '14px', color: '#71717a' }, children: `${toolCount} tool${toolCount !== 1 ? 's' : ''}` } },
+                    ],
+                  },
+                },
+                // Footer branding
+                {
+                  type: 'div',
+                  props: {
+                    style: {
+                      position: 'absolute',
+                      bottom: '32px',
+                      left: '56px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    },
+                    children: [
+                      {
+                        type: 'div',
+                        props: {
+                          style: { width: '24px', height: '24px', borderRadius: '6px', background: `linear-gradient(135deg, ${color}, #8b5cf6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'white', fontWeight: 700 },
+                          children: 'A',
+                        },
+                      },
+                      { type: 'div', props: { style: { fontSize: '14px', fontWeight: 700, color: '#a1a1aa' }, children: 'AIDock' } },
+                      { type: 'div', props: { style: { fontSize: '12px', color: '#52525b', marginLeft: '4px' }, children: 'aidock-beta.vercel.app' } },
                     ],
                   },
                 },
               ],
             },
           },
-          // Tool count badges
-          {
-            type: 'div',
-            props: {
-              style: { display: 'flex', gap: '16px', marginTop: '36px' },
-              children: [
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      padding: '10px 24px',
-                      borderRadius: '12px',
-                      background: 'rgba(255,255,255,0.06)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      fontSize: '15px',
-                      color: '#a1a1aa',
-                    },
-                    children: `${toolCount} tool${toolCount !== 1 ? 's' : ''} in stack`,
-                  },
-                },
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      padding: '10px 24px',
-                      borderRadius: '12px',
-                      background: 'rgba(255,255,255,0.06)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      fontSize: '15px',
-                      color: '#a1a1aa',
-                    },
-                    children: 'Curated Stack',
-                  },
-                },
-              ],
-            },
-          },
-          // Footer
+          // Right panel — tool cards preview
           {
             type: 'div',
             props: {
               style: {
-                position: 'absolute',
-                bottom: '40px',
-                left: '60px',
-                right: '60px',
                 display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTop: '1px solid rgba(255,255,255,0.08)',
-                paddingTop: '20px',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: '10px',
+                padding: '40px 40px 40px 0',
+                flexGrow: 1,
+                flexWrap: 'wrap',
+                maxHeight: '100%',
               },
-              children: [
-                { type: 'div', props: { style: { fontSize: '20px', fontWeight: 700, color: '#f5f5f7' }, children: 'AIDock' } },
-                { type: 'div', props: { style: { fontSize: '14px', color: '#71717a' }, children: 'aidock-beta.vercel.app' } },
+              children: toolCards.length > 0 ? toolCards : [
+                {
+                  type: 'div',
+                  props: {
+                    style: { fontSize: '14px', color: '#52525b' },
+                    children: 'No tools yet',
+                  },
+                },
               ],
             },
           },
