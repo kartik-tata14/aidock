@@ -2497,8 +2497,8 @@ app.get('/api/og-image/:slug', async (req, res) => {
     });
 
     const sharp = require('sharp');
-    const png = await sharp(Buffer.from(svg), { density: 144 })
-      .png({ compressionLevel: 4 })
+    const png = await sharp(Buffer.from(svg))
+      .png({ compressionLevel: 3 })
       .toBuffer();
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
