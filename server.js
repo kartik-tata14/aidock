@@ -2109,7 +2109,7 @@ function getInterBold() {
   return _interBoldCache;
 }
 
-// In-memory OG image cache (slug -> { png, timestamp })
+// In-memory OG image cache (slug -> { buf, timestamp })
 const ogImageCache = new Map();
 const OG_CACHE_TTL = 3600000; // 1 hour
 
@@ -2121,11 +2121,10 @@ app.get('/api/og-image/:slug', async (req, res) => {
     const cached = ogImageCache.get(slug);
     if (cached && (Date.now() - cached.timestamp) < OG_CACHE_TTL) {
       res.setHeader('Content-Type', 'image/png');
-      res.setHeader('Content-Length', cached.png.length);
+      res.setHeader('Content-Length', cached.buf.length);
       res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
       res.setHeader('X-Vercel-No-Optimize', '1');
-      res.setHeader('X-OG-Cache', 'HIT');
-      return res.send(cached.png);
+      return res.send(cached.buf);
     }
 
     await ensureDb();
@@ -2136,76 +2135,63 @@ app.get('/api/og-image/:slug', async (req, res) => {
     if (result.rows.length === 0) return res.status(404).send('Not found');
     const row = result.rows[0];
 
-    // Fetch actual tools in the stack
     const toolsResult = await db.execute(
-      "SELECT t.name, t.category FROM stack_tools st JOIN tools t ON st.tool_id = t.id WHERE st.stack_id = ? ORDER BY st.sort_order, st.added_at LIMIT 6",
+      "SELECT t.name, t.category FROM stack_tools st JOIN tools t ON st.tool_id = t.id WHERE st.stack_id = ? ORDER BY st.sort_order, st.added_at LIMIT 5",
       [row.id]
     );
     const tools = toolsResult.rows || [];
     const toolCountResult = await db.execute("SELECT COUNT(*) as cnt FROM stack_tools WHERE stack_id = ?", [row.id]);
     const toolCount = toolCountResult.rows[0]?.cnt || 0;
 
-    const stackName = (row.name || 'Untitled Stack').slice(0, 36);
-    const creatorName = (row.creator_name || 'Unknown').slice(0, 25);
-    const desc = (row.description || `A curated collection of ${toolCount} AI tools`).slice(0, 100);
+    const stackName = (row.name || 'Untitled Stack').slice(0, 32);
+    const creatorName = (row.creator_name || 'Unknown').slice(0, 22);
+    const desc = (row.description || `A curated collection of ${toolCount} AI tools`).slice(0, 80);
     const color = row.color || '#0a84ff';
 
     const sharp = require('sharp');
 
-    // Resize avatar to tiny 104x104 PNG data URI for satori (avoids processing multi-MB images)
+    // Resize avatar to small PNG for embedding
     let avatarDataUri = '';
     if (row.creator_avatar && row.creator_avatar.startsWith('data:image/')) {
       try {
         const base64Data = row.creator_avatar.split(',')[1];
         const avatarBuf = Buffer.from(base64Data, 'base64');
-        const smallAvatar = await sharp(avatarBuf).resize(104, 104, { fit: 'cover' }).png().toBuffer();
+        const smallAvatar = await sharp(avatarBuf).resize(120, 120, { fit: 'cover' }).png().toBuffer();
         avatarDataUri = 'data:image/png;base64,' + smallAvatar.toString('base64');
       } catch (e) { /* fallback to initial */ }
     }
 
-    // Category colors
     const catColors = {
       'AI Assistant': '#8b5cf6', 'Writing': '#ec4899', 'Coding': '#10b981',
       'Image': '#f59e0b', 'Video': '#ef4444', 'Audio': '#06b6d4',
       'Productivity': '#3b82f6', 'Research': '#6366f1', 'Design': '#f97316',
       'Marketing': '#14b8a6', 'Data': '#a855f7', 'Other': '#6b7280',
     };
-    function getCatColor(cat) { return catColors[cat] || catColors['Other']; }
+    function getCatColor(cat) { return catColors[cat] || '#6b7280'; }
 
     const satori = require('satori').default;
     const interFont = getInterFont();
     const interBold = getInterBold();
 
-    // Build tool cards (up to 5)
-    const displayTools = tools.slice(0, 5);
+    // Tool cards — larger text for JPEG readability
+    const displayTools = tools.slice(0, 4);
     const toolCards = displayTools.map(tool => ({
       type: 'div',
       props: {
         style: {
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '14px 18px',
-          borderRadius: '14px',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.07)',
+          display: 'flex', alignItems: 'center', gap: '14px',
+          padding: '16px 20px', borderRadius: '16px',
+          background: '#1a1a2e', border: '1px solid #2a2a3e',
         },
         children: [
           {
             type: 'div',
             props: {
               style: {
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                background: `linear-gradient(135deg, ${getCatColor(tool.category)}, ${getCatColor(tool.category)}88)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '15px',
-                color: 'white',
-                fontWeight: 700,
-                flexShrink: 0,
+                width: '44px', height: '44px', borderRadius: '12px',
+                background: getCatColor(tool.category),
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '18px', color: 'white', fontWeight: 700, flexShrink: 0,
               },
               children: (tool.name || 'T').charAt(0).toUpperCase(),
             },
@@ -2213,10 +2199,10 @@ app.get('/api/og-image/:slug', async (req, res) => {
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column', gap: '2px' },
+              style: { display: 'flex', flexDirection: 'column', gap: '3px' },
               children: [
-                { type: 'div', props: { style: { fontSize: '14px', fontWeight: 700, color: '#f4f4f5' }, children: (tool.name || 'Tool').slice(0, 20) } },
-                { type: 'div', props: { style: { fontSize: '11px', color: '#71717a' }, children: tool.category || 'Tool' } },
+                { type: 'div', props: { style: { fontSize: '16px', fontWeight: 700, color: '#ffffff' }, children: (tool.name || 'Tool').slice(0, 18) } },
+                { type: 'div', props: { style: { fontSize: '13px', color: '#9ca3af' }, children: tool.category || 'Tool' } },
               ],
             },
           },
@@ -2224,56 +2210,44 @@ app.get('/api/og-image/:slug', async (req, res) => {
       },
     }));
 
-    if (toolCount > 5) {
+    if (toolCount > 4) {
       toolCards.push({
         type: 'div',
         props: {
-          style: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 18px', borderRadius: '14px', border: '1px dashed rgba(255,255,255,0.1)', fontSize: '13px', color: '#52525b' },
-          children: `+${toolCount - 5} more`,
+          style: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 20px', borderRadius: '16px', border: '2px dashed #2a2a3e', fontSize: '15px', color: '#6b7280', fontWeight: 700 },
+          children: `+${toolCount - 4} more tools`,
         },
       });
     }
 
-    // Avatar element
+    // Avatar — larger for visibility
     const avatarElement = avatarDataUri
-      ? {
-          type: 'img',
-          props: {
-            src: avatarDataUri,
-            width: 52,
-            height: 52,
-            style: { width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${color}` },
-          },
-        }
+      ? { type: 'img', props: { src: avatarDataUri, width: 60, height: 60, style: { width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${color}` } } }
       : {
           type: 'div',
           props: {
             style: {
-              width: '52px', height: '52px', borderRadius: '50%',
-              background: `linear-gradient(135deg, ${color}, #8b5cf6)`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '22px', color: 'white', fontWeight: 700,
-              border: '2px solid rgba(255,255,255,0.1)',
+              width: '60px', height: '60px', borderRadius: '50%',
+              background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '26px', color: 'white', fontWeight: 700, border: '3px solid #2a2a3e',
             },
             children: creatorName.charAt(0).toUpperCase(),
           },
         };
 
+    // Layout designed for JPEG: high contrast, solid fills, large text
     const markup = {
       type: 'div',
       props: {
-        style: { width: '100%', height: '100%', display: 'flex', background: '#09090b', fontFamily: 'Inter', position: 'relative', overflow: 'hidden' },
+        style: { width: '100%', height: '100%', display: 'flex', background: '#0f1117', fontFamily: 'Inter', position: 'relative' },
         children: [
-          // Background glows
-          { type: 'div', props: { style: { position: 'absolute', top: '-200px', right: '100px', width: '600px', height: '600px', borderRadius: '50%', background: `radial-gradient(circle, ${color}18 0%, transparent 60%)` } } },
-          { type: 'div', props: { style: { position: 'absolute', bottom: '-200px', left: '200px', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, #8b5cf618 0%, transparent 60%)' } } },
-          // Top accent
-          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: `linear-gradient(90deg, transparent, ${color}, #8b5cf6, transparent)` } } },
+          // Left accent stripe
+          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, bottom: 0, width: '6px', background: color } } },
           // Left panel
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '52px 48px', width: '620px', position: 'relative' },
+              style: { display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '56px 50px 56px 56px', width: '620px' },
               children: [
                 // Top: stack info
                 {
@@ -2281,17 +2255,17 @@ app.get('/api/og-image/:slug', async (req, res) => {
                   props: {
                     style: { display: 'flex', flexDirection: 'column' },
                     children: [
-                      { type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: '16px' }, children: [
-                        { type: 'div', props: { style: { width: '52px', height: '52px', borderRadius: '14px', background: `linear-gradient(135deg, ${color}, ${color}88)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', color: 'white', fontWeight: 700 }, children: stackName.charAt(0).toUpperCase() } },
-                        { type: 'div', props: { style: { display: 'flex', flexDirection: 'column', gap: '2px' }, children: [
-                          { type: 'div', props: { style: { fontSize: '12px', color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.05em' }, children: 'AI STACK' } },
-                          { type: 'div', props: { style: { fontSize: '32px', fontWeight: 700, color: '#fafafa', lineHeight: 1.1 }, children: stackName } },
-                        ] } },
+                      // Stack name (LARGE for readability)
+                      { type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: '18px' }, children: [
+                        { type: 'div', props: { style: { width: '58px', height: '58px', borderRadius: '16px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', color: 'white', fontWeight: 700 }, children: stackName.charAt(0).toUpperCase() } },
+                        { type: 'div', props: { style: { fontSize: '38px', fontWeight: 700, color: '#ffffff', lineHeight: 1.15 }, children: stackName } },
                       ] } },
-                      { type: 'div', props: { style: { fontSize: '17px', color: '#a1a1aa', marginTop: '18px', lineHeight: 1.5, maxWidth: '500px' }, children: desc } },
-                      { type: 'div', props: { style: { display: 'flex', gap: '12px', marginTop: '24px' }, children: [
-                        { type: 'div', props: { style: { padding: '6px 14px', borderRadius: '8px', background: `${color}15`, border: `1px solid ${color}30`, fontSize: '13px', color: color, fontWeight: 700 }, children: `${toolCount} tool${toolCount !== 1 ? 's' : ''}` } },
-                        { type: 'div', props: { style: { padding: '6px 14px', borderRadius: '8px', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', fontSize: '13px', color: '#a78bfa', fontWeight: 700 }, children: 'Curated' } },
+                      // Description
+                      { type: 'div', props: { style: { fontSize: '20px', color: '#9ca3af', marginTop: '20px', lineHeight: 1.5 }, children: desc } },
+                      // Stats
+                      { type: 'div', props: { style: { display: 'flex', gap: '14px', marginTop: '28px' }, children: [
+                        { type: 'div', props: { style: { padding: '8px 18px', borderRadius: '10px', background: '#1a1a2e', border: `2px solid ${color}`, fontSize: '15px', color: '#ffffff', fontWeight: 700 }, children: `${toolCount} tools` } },
+                        { type: 'div', props: { style: { padding: '8px 18px', borderRadius: '10px', background: '#1a1a2e', border: '2px solid #8b5cf6', fontSize: '15px', color: '#ffffff', fontWeight: 700 }, children: 'Curated Stack' } },
                       ] } },
                     ],
                   },
@@ -2300,21 +2274,18 @@ app.get('/api/og-image/:slug', async (req, res) => {
                 {
                   type: 'div',
                   props: {
-                    style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '20px' },
+                    style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '2px solid #1f2937', paddingTop: '24px' },
                     children: [
-                      { type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: '14px' }, children: [
+                      { type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: '16px' }, children: [
                         avatarElement,
-                        { type: 'div', props: { style: { display: 'flex', flexDirection: 'column', gap: '2px' }, children: [
-                          { type: 'div', props: { style: { fontSize: '11px', color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.05em' }, children: 'SHARED BY' } },
-                          { type: 'div', props: { style: { fontSize: '17px', fontWeight: 700, color: '#e4e4e7' }, children: creatorName } },
+                        { type: 'div', props: { style: { display: 'flex', flexDirection: 'column', gap: '4px' }, children: [
+                          { type: 'div', props: { style: { fontSize: '13px', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }, children: 'SHARED BY' } },
+                          { type: 'div', props: { style: { fontSize: '20px', fontWeight: 700, color: '#ffffff' }, children: creatorName } },
                         ] } },
                       ] } },
-                      { type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: '8px' }, children: [
-                        { type: 'div', props: { style: { width: '28px', height: '28px', borderRadius: '8px', background: `linear-gradient(135deg, ${color}, #8b5cf6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: 'white', fontWeight: 700 }, children: 'A' } },
-                        { type: 'div', props: { style: { display: 'flex', flexDirection: 'column' }, children: [
-                          { type: 'div', props: { style: { fontSize: '14px', fontWeight: 700, color: '#a1a1aa' }, children: 'AIDock' } },
-                          { type: 'div', props: { style: { fontSize: '10px', color: '#3f3f46' }, children: 'aidock-beta.vercel.app' } },
-                        ] } },
+                      { type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: '10px' }, children: [
+                        { type: 'div', props: { style: { width: '32px', height: '32px', borderRadius: '10px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', color: 'white', fontWeight: 700 }, children: 'A' } },
+                        { type: 'div', props: { style: { fontSize: '18px', fontWeight: 700, color: '#ffffff' }, children: 'AIDock' } },
                       ] } },
                     ],
                   },
@@ -2326,9 +2297,9 @@ app.get('/api/og-image/:slug', async (req, res) => {
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '8px', padding: '44px 44px 44px 0', flexGrow: 1 },
+              style: { display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '10px', padding: '50px 50px 50px 0', flexGrow: 1 },
               children: toolCards.length > 0 ? toolCards : [
-                { type: 'div', props: { style: { padding: '20px', borderRadius: '14px', border: '1px dashed rgba(255,255,255,0.08)', fontSize: '14px', color: '#3f3f46', textAlign: 'center' }, children: 'Add tools to your stack' } },
+                { type: 'div', props: { style: { padding: '24px', borderRadius: '16px', border: '2px dashed #2a2a3e', fontSize: '16px', color: '#6b7280', textAlign: 'center' }, children: 'Add tools to your stack' } },
               ],
             },
           },
@@ -2345,19 +2316,20 @@ app.get('/api/og-image/:slug', async (req, res) => {
       ],
     });
 
-    const png = await sharp(Buffer.from(svg))
-      .png({ compressionLevel: 3 })
+    // Render at 2x for supersampled quality, downscale to 1200x630 with lanczos3
+    const buf = await sharp(Buffer.from(svg), { density: 144 })
+      .resize(1200, 630, { kernel: 'lanczos3' })
+      .png({ compressionLevel: 6, palette: false })
       .toBuffer();
 
     // Cache the result
-    ogImageCache.set(slug, { png, timestamp: Date.now() });
+    ogImageCache.set(slug, { buf, timestamp: Date.now() });
 
     res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Content-Length', png.length);
+    res.setHeader('Content-Length', buf.length);
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
     res.setHeader('X-Vercel-No-Optimize', '1');
-    res.setHeader('X-OG-Cache', 'MISS');
-    res.send(png);
+    res.send(buf);
   } catch (err) {
     console.error('OG image error:', err);
     res.status(500).send('Failed to generate image');
